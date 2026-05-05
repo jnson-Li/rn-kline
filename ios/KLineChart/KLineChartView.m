@@ -10,6 +10,7 @@
 #import "ChartStyle.h"
 #import "KLinePainterView.h"
 #import "KLineInfoView.h"
+#import <math.h>
 
 @interface KLineChartView()
 @property(nonatomic,strong) KLinePainterView *painterView;
@@ -71,6 +72,19 @@
     _scaleX = scaleX;
     [self initIndicatirs];
     self.painterView.scaleX = scaleX;
+}
+
+- (void)setCandleWidth:(CGFloat)candleWidth {
+    if (candleWidth <= 0) {
+        return;
+    }
+    _candleWidth = candleWidth;
+    ChartStyle_candleWidth = candleWidth;
+    ChartStyle_defaultcandleWidth = candleWidth;
+    ChartStyle_volWidth = candleWidth;
+    self.scrollX = -self.frame.size.width / 5 + ChartStyle_candleWidth * self.scaleX / 2;
+    [self initIndicatirs];
+    self.painterView.scaleX = self.scaleX;
 }
 
 - (void)setMainState:(MainState)mainState {
@@ -320,48 +334,41 @@
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan: {
             _isScale = true;
+            if(_displayLink) {
+                [_displayLink invalidate];
+                _displayLink = nil;
+            }
             // 记录锚点（两指中点）
             CGPoint p = [gesture locationInView:self.painterView];
             self.pinchAnchorXInView = p.x;
-            // 将屏幕坐标映射到内容坐标
-            self.pinchAnchorContentX = self.scrollX + self.pinchAnchorXInView;
             // 记录起始缩放
             self.lastscaleX = self.scaleX;
+            CGFloat unitW = ChartStyle_candleWidth * self.lastscaleX + ChartStyle_canldeMargin;
+            if (unitW < 0.0001) unitW = 0.0001;
+            // 将锚点映射到小数索引，缩放时保持同一根 K 线在手指中点下方
+            self.pinchAnchorContentX = (self.scrollX + self.pinchAnchorXInView) / unitW;
             break;
             
         }
         case UIGestureRecognizerStateChanged: {
             _isScale = true;
             
-            const CGFloat k = 0.5;
-            const CGFloat deadzone = 0.02;
-            CGFloat delta = gesture.scale - 1.0;
-            if (fabs(delta) < deadzone) {
-                gesture.scale = 1.0;
-                break;
-            }
-            CGFloat damped = 1.0 + delta * k;
-            CGFloat newScaleX = [self clamp:(self.scaleX * damped) min:0.2 max:2.0];
+            CGFloat gestureScale = gesture.scale;
+            CGFloat acceleratedScale = gestureScale < 1.0
+                ? pow(gestureScale, 3.0)
+                : pow(gestureScale, 1.4);
+            CGFloat newScaleX = [self clamp:(self.lastscaleX * acceleratedScale) min:0.05 max:2.0];
             
-            // 2) 先根据“旧scale”记录锚点对应的索引（小数索引更平滑）
-            CGFloat unitW_old = ChartStyle_candleWidth * self.scaleX + ChartStyle_canldeMargin;
-            // 防御：避免除零
-            if (unitW_old < 0.0001) unitW_old = 0.0001;
-            CGFloat idxF = (self.scrollX + self.pinchAnchorXInView) / unitW_old;
-            
-            // 3) 用 setter 设置 scaleX（很重要！）
+            // 1) 用 setter 设置 scaleX（很重要！）
             //    这样 painterView.scaleX 会同步，initIndicatirs 会重算 min/max
             self.scaleX = newScaleX;
             
-            // 4) 用“新单位宽”反解出为了让锚点不动所需要的 scrollX
+            // 2) 用“新单位宽”反解出为了让锚点不动所需要的 scrollX
             CGFloat unitW_new = ChartStyle_candleWidth * self.scaleX + ChartStyle_canldeMargin;
-            CGFloat newScrollX = idxF * unitW_new - self.pinchAnchorXInView;
+            CGFloat newScrollX = self.pinchAnchorContentX * unitW_new - self.pinchAnchorXInView;
             
-            // 5) clamp 到“当前（新边界）”范围，再落到属性（会同步到 painterView）
+            // 3) clamp 到“当前（新边界）”范围，再落到属性（会同步到 painterView）
             self.scrollX = [self clamp:newScrollX min:self.minScroll max:self.maxScroll];
-            
-            // 6) 重置手势scale，保持增量模式
-            gesture.scale = 1.0;
             break;
         }
         case UIGestureRecognizerStateEnded:

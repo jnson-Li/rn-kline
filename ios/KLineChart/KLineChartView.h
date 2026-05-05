@@ -34,6 +34,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic,assign) CGFloat scaleX;
 
+@property(nonatomic,assign) CGFloat candleWidth;
+
 @property(nonatomic,assign) BOOL isLongPress;
 
 @property(nonatomic,assign) CGFloat longPressX;

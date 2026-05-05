@@ -135,6 +135,10 @@ using namespace facebook::react;
   if (oldViewProps.gridRows != newViewProps.gridRows) {
     _klineCharView.gridRows = newViewProps.gridRows;
   }
+  // 设置每根蜡烛图宽度
+  if (oldViewProps.candleWidth != newViewProps.candleWidth && newViewProps.candleWidth > 0) {
+    _klineCharView.candleWidth = newViewProps.candleWidth;
+  }
   // Slide left K line inside indent width ⚠️暂时忽略 overScrollRange
   // Y值精度格式化
   if (oldViewProps.valueFormatter != newViewProps.valueFormatter) {
