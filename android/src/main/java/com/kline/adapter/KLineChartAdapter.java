@@ -149,6 +149,7 @@ public class KLineChartAdapter<T extends KLineEntity> extends BaseKLineChartAdap
      * @param position 索引值
      */
     public void changeItem(int position, T data) {
+        if (data == null || position < 0 || position >= dataSource.size()) return;
         dataSource.set(position, data);
         points = dataTools.calculate(dataSource);
         notifyDataSetChanged();

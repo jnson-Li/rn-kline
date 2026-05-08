@@ -478,7 +478,24 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     protected boolean showRightDotPriceLine;
 
     protected void lastChange() {
+        if (points == null || indexInterval <= 0 || points.length < indexInterval) {
+            return;
+        }
+
+        int availableCount = points.length / indexInterval;
+        if (availableCount <= 0) {
+            return;
+        }
+
+        if (itemsCount <= 0 || itemsCount > availableCount) {
+            setItemsCount(availableCount);
+        }
+
         int tempIndex = (itemsCount - 1) * indexInterval;
+        if (tempIndex < 0 || tempIndex + Constants.INDEX_VOL >= points.length || tempIndex + Constants.INDEX_CLOSE >= points.length) {
+            return;
+        }
+
         if (isAnimationLast) {
             generaterAnimator(lastVol, points[tempIndex + Constants.INDEX_VOL],
                     animation -> lastVol = (Float) animation.getAnimatedValue());
