@@ -89,7 +89,7 @@ public class KChartView extends BaseKChartView {
                 setLogoResouce(array.getResourceId(R.styleable.KChartView_chartLogo, 0));
                 //最大最小值
                 setLimitTextSize(array.getDimension(R.styleable.KChartView_limitTextSize, DpUtil.Dp2Px(context, 10)));
-                setLimitTextColor(array.getColor(R.styleable.KChartView_limitTextColor, Color.parseColor("#6D87A8")));
+                setLimitTextColor(array.getColor(R.styleable.KChartView_limitTextColor, Color.parseColor("#FFFFFF")));
                 //全局
                 setBetterX(array.getBoolean(R.styleable.KChartView_betterXLabel, true));
                 setBetterSelectedX(array.getBoolean(R.styleable.KChartView_betterSelectedXLabel, true));
