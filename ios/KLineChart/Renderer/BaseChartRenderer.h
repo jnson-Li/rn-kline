@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,assign) CGFloat candleWidth;
 @property(nonatomic,assign) CGFloat scaleY;
 @property(nonatomic,assign) CGFloat topPadding;
+@property(nonatomic,assign) CGFloat legendMarginLeft;
 
 - (instancetype)initWithMaxValue:(CGFloat)maxValue
                         minValue:(CGFloat)minValue

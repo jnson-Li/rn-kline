@@ -38,6 +38,7 @@ using namespace facebook::react;
   _klineHeight = _view.bounds.size.height;
   if(_klineCharView == nil) {
     _klineCharView = [[KLineChartView alloc] initWithFrame:_view.bounds];
+    _klineCharView.legendMarginLeft = 16.0;
     _klineCharView.delegate = self;
   }
   [KLineStateManager manager].klineChart = self.klineCharView;
@@ -316,7 +317,10 @@ using namespace facebook::react;
   // 选中十字线X轴坐标连框纵向内边距 ⚠️暂时忽略 selectedDateBoxVerticalPadding
   // 选中十字线X轴坐标连框横向内边距 ⚠️暂时忽略 selectedDateBoxHorizontalPadding
   // 设置主实图图例距离视图上边缘的距离 ⚠️暂时忽略 mainLegendMarginTop
-  // 设置图例距离视图左边缘的距离 ⚠️暂时忽略 legendMarginLeft
+  // 设置图例距离视图左边缘的距离
+  if (oldViewProps.legendMarginLeft != newViewProps.legendMarginLeft && newViewProps.legendMarginLeft > 0) {
+    _klineCharView.legendMarginLeft = newViewProps.legendMarginLeft;
+  }
   // 设置涨的颜色
   if (oldViewProps.increaseColor != newViewProps.increaseColor) {
     if (newViewProps.increaseColor.size() != 0) {

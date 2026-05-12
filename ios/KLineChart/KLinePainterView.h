@@ -76,6 +76,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic,strong) NSString* mainValueFormatter;
 
+@property(nonatomic,assign) CGFloat legendMarginLeft;
+
 @property(nonatomic,copy) void(^showInfoBlock)(KLineModel *model, BOOL isLeft);
 
 - (instancetype)initWithFrame:(CGRect)frame

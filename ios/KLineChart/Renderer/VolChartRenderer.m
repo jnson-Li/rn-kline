@@ -85,7 +85,7 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
         NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: self.volMa2Color ?: [UIColor colorWithCGColor:ChartColors_ma10Color.CGColor]}];
         [topAttributeText appendAttributedString:attr];
     }
-    [topAttributeText drawAtPoint:CGPointMake(5, CGRectGetMinY(self.chartRect))];
+    [topAttributeText drawAtPoint:CGPointMake(self.legendMarginLeft, CGRectGetMinY(self.chartRect))];
 }
 
 - (void)drawRightText:(CGContextRef)context gridRows:(NSUInteger)gridRows gridColums:(NSUInteger)gridColums

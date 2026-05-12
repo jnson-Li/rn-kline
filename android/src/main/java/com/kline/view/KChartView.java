@@ -115,7 +115,7 @@ public class KChartView extends BaseKChartView {
                 //图例
                 setVolLegendColor(array.getColor(R.styleable.KChartView_volLegendColor, Color.parseColor("#6D87A8")));
                 setMainLegendMarginTop(array.getDimension(R.styleable.KChartView_mainLegendMarginTop, 10f));
-                setLegendMarginLeft(array.getDimension(R.styleable.KChartView_legendMarginLeft, 0f));
+                setLegendMarginLeft(array.getDimension(R.styleable.KChartView_legendMarginLeft, DpUtil.Dp2Px(context, 16)));
                 setVolLegendMarginTop(array.getDimension(R.styleable.KChartView_volLegendMarginTop, 10f));
                 //成交量
                 setVolLineChartColor(array.getColor(R.styleable.KChartView_volLineChartColor, Color.parseColor("#4B85A6")));
@@ -1196,7 +1196,7 @@ public class KChartView extends BaseKChartView {
     /**
      * 设置主实图图例距离主视图上边缘的距离
      *
-     * @param legendMarginLeft Legend margin left , default 0
+     * @param legendMarginLeft Legend margin left , default 16dp
      * @return {@link KChartView}
      */
     public KChartView setLegendMarginLeft(float legendMarginLeft) {

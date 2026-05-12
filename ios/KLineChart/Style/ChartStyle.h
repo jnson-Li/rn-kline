@@ -110,3 +110,5 @@ static CGFloat ChartStyle_bottomDatefontSize = 10;
    
    //表格右边文字价格
 static CGFloat ChartStyle_reightTextSize = 10;
+
+static CGFloat ChartStyle_legendMarginLeft = 16.0;

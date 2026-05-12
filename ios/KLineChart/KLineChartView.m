@@ -44,6 +44,12 @@
     [self initIndicatirs];
 }
 
+- (void)setLegendMarginLeft:(CGFloat)legendMarginLeft {
+    _legendMarginLeft = legendMarginLeft;
+    self.painterView.legendMarginLeft = legendMarginLeft;
+    [self.painterView setNeedsDisplay];
+}
+
 - (void)setDatas:(NSArray<KLineModel *> *)datas {
     _datas = datas;
     [self initIndicatirs];
@@ -229,10 +235,12 @@
         _scaleX = 1;
         _mainState = MainStateMA;
         _secondaryState = SecondaryStateWR;
+        _legendMarginLeft = ChartStyle_legendMarginLeft;
         _scrollX = -self.frame.size.width / 5 + ChartStyle_candleWidth / 2;
         _rightBlankFactor = 4.0; // 初始：1/4
         [self initIndicatirs];
         _painterView = [[KLinePainterView alloc] initWithFrame:self.bounds datas:_datas scrollX:_scrollX isLine:_isLine scaleX:_scaleX isLongPress:_isLongPress mainState:_mainState secondaryState:_secondaryState];
+        _painterView.legendMarginLeft = _legendMarginLeft;
         [self addSubview:_painterView];
          __weak typeof(self) weakSelf = self;
         _painterView.showInfoBlock = ^(KLineModel * _Nonnull model, BOOL isLeft) {

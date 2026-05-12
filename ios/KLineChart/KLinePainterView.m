@@ -402,16 +402,19 @@
 
 -(void)initRenderer {
     _mainRenderer = [[MainChartRenderer alloc] initWithMaxValue:_mMainMaxValue minValue:_mMainMinValue chartRect:_mainRect candleWidth:_candleWidth topPadding:ChartStyle_topPadding isLine:_isLine state:_mainState];
+    _mainRenderer.legendMarginLeft = _legendMarginLeft > 0 ? _legendMarginLeft : ChartStyle_legendMarginLeft;
     _mainRenderer.ma1Color = _ma1Color;
     _mainRenderer.ma2Color = _ma2Color;
     _mainRenderer.ma3Color = _ma3Color;
     if(_volState != VolStateNONE) {
         _volRenderer = [[VolChartRenderer alloc] initWithMaxValue:_mVolMaxValue minValue:_mVolMinValue chartRect:_volRect candleWidth:_candleWidth topPadding:ChartStyle_childPadding];
+        _volRenderer.legendMarginLeft = _legendMarginLeft > 0 ? _legendMarginLeft : ChartStyle_legendMarginLeft;
         _volRenderer.volMa1Color = _volMa1Color;
         _volRenderer.volMa2Color = _volMa2Color;
     }
     if(_secondaryState != SecondaryStateNONE) {
         _seconderyRender = [[SecondaryChartRenderer alloc] initWithMaxValue:_mSecondaryMaxValue minValue:_mSecondaryMinValue chartRect:_secondaryRect candleWidth:_candleWidth topPadding:ChartStyle_childPadding state:_secondaryState];
+        _seconderyRender.legendMarginLeft = _legendMarginLeft > 0 ? _legendMarginLeft : ChartStyle_legendMarginLeft;
     }
 }
 

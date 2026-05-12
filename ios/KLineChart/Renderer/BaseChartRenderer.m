@@ -25,6 +25,7 @@
         self.chartRect = chartRect;
         self.candleWidth = candleWidth;
         self.topPadding = topPadding;
+        self.legendMarginLeft = ChartStyle_legendMarginLeft;
         _scaleY = (chartRect.size.height - topPadding) / (maxValue - minValue);
     }
     return self;

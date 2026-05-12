@@ -195,7 +195,7 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
         default:
             break;
     }
-    [topAttributeText drawAtPoint:CGPointMake(5, CGRectGetMinY(self.chartRect))];
+    [topAttributeText drawAtPoint:CGPointMake(self.legendMarginLeft, CGRectGetMinY(self.chartRect))];
 }
 
 

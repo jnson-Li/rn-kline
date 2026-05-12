@@ -89,6 +89,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic,strong) NSString* mainValueFormatter;
 
+@property(nonatomic,assign) CGFloat legendMarginLeft;
+
 @end
 
 NS_ASSUME_NONNULL_END
