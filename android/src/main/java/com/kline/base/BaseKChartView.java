@@ -1565,6 +1565,13 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
                 (klineStatus == Status.KLINE_SHOW_TIME_LINE ? 0 : chartItemWidth * getScaleX() / 2);
     }
 
+    /**
+     * Initial position keeps the latest candle 1/4 screen away from the right edge.
+     */
+    protected float getInitialRightBlankTranslate() {
+        return getMinTranslate() - renderWidth / 4f;
+    }
+
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
@@ -2239,7 +2246,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
                 int temp = (tempDataCount - 1) * indexInterval;
                 lastPrice = points[temp + Constants.INDEX_CLOSE];
                 lastVol = points[temp + Constants.INDEX_VOL];
-                changeTranslated(getMinTranslate());
+                changeTranslated(getInitialRightBlankTranslate());
                 startAnimation();
             } else if (currentCount == tempDataCount) { //更新数据
                 BaseKChartView.this.points = points;

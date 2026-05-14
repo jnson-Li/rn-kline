@@ -32,6 +32,7 @@
 @property(nonatomic, assign) CGFloat pinchAnchorXInView;   // 两指中心（视图坐标）
 @property(nonatomic, assign) CGFloat pinchAnchorContentX;
 @property (nonatomic, assign) CGFloat rightBlankFactor;
+@property (nonatomic, assign) BOOL didApplyInitialRightBlank;
 
 @end
 
@@ -88,7 +89,7 @@
     ChartStyle_candleWidth = candleWidth;
     ChartStyle_defaultcandleWidth = candleWidth;
     ChartStyle_volWidth = candleWidth;
-    self.scrollX = -self.frame.size.width / 5 + [self effectiveBaseCandleWidth] * self.scaleX / 2;
+    self.scrollX = [self initialRightBlankScrollX];
     [self initIndicatirs];
     self.painterView.baseCandleWidth = candleWidth;
     self.painterView.scaleX = self.scaleX;
@@ -237,7 +238,7 @@
         _mainState = MainStateMA;
         _secondaryState = SecondaryStateWR;
         _legendMarginLeft = ChartStyle_legendMarginLeft;
-        _scrollX = -self.frame.size.width / 5 + ChartStyle_candleWidth / 2;
+        _scrollX = -self.frame.size.width / 4.0 + ChartStyle_candleWidth / 2.0;
         _rightBlankFactor = 4.0; // 初始：1/4
         [self initIndicatirs];
         _painterView = [[KLinePainterView alloc] initWithFrame:self.bounds datas:_datas scrollX:_scrollX isLine:_isLine scaleX:_scaleX isLongPress:_isLongPress mainState:_mainState secondaryState:_secondaryState];
@@ -268,6 +269,10 @@
 
 -(void)initIndicatirs {
     [self updateScrollRange];
+    if (!self.didApplyInitialRightBlank && _datas.count > 0 && self.frame.size.width > 0) {
+        _scrollX = [self initialRightBlankScrollX];
+        self.didApplyInitialRightBlank = YES;
+    }
     self.scrollX = [self clamp:_scrollX min:_minScroll max:_maxScroll];
     self.lastScrollX = self.scrollX;
 }
@@ -283,20 +288,14 @@
     CGFloat normalminScroll = -self.frame.size.width / self.rightBlankFactor
                                 + candleWidth / 2.0;
     self.minScroll = MIN(normalminScroll,-dataScroll);
-    NSLog(@"[KLineChart][range] scaleX=%f candleWidth=%f itemWidth=%f dataLength=%f count=%lu maxScroll=%f minScroll=%f scrollX=%f frameWidth=%f",
-          _scaleX,
-          candleWidth,
-          itemWidth,
-          dataLength,
-          (unsigned long)_datas.count,
-          _maxScroll,
-          _minScroll,
-          _scrollX,
-          self.frame.size.width);
 }
 
 -(CGFloat)effectiveBaseCandleWidth {
     return _candleWidth > 0 ? _candleWidth : ChartStyle_candleWidth;
+}
+
+-(CGFloat)initialRightBlankScrollX {
+    return -self.frame.size.width / 4.0 + [self effectiveBaseCandleWidth] * self.scaleX / 2.0;
 }
 
 -(void)dragKlineEvent:(UIPanGestureRecognizer *)gesture{
@@ -410,17 +409,6 @@
             // 3) clamp 到“当前（新边界）”范围，再落到属性（会同步到 painterView）
             self.scrollX = [self clamp:newScrollX min:self.minScroll max:self.maxScroll];
             self.lastScrollX = self.scrollX;
-            NSLog(@"[KLineChart][pinch] gestureScale=%f newScaleX=%f anchorIndex=%f anchorX=%f newScrollX=%f clampedScrollX=%f maxScroll=%f minScroll=%f wasAtMax=%d wasAtMin=%d",
-                  gestureScale,
-                  newScaleX,
-                  self.pinchAnchorContentX,
-                  self.pinchAnchorXInView,
-                  newScrollX,
-                  self.scrollX,
-                  self.maxScroll,
-                  self.minScroll,
-                  wasAtMaxScroll,
-                  wasAtMinScroll);
             break;
         }
         case UIGestureRecognizerStateEnded:

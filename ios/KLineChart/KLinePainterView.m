@@ -333,20 +333,6 @@
     CGFloat visibleWidth = MAX(self.frame.size.width - self.startX + itemWidth, 0);
     NSUInteger diffIndex = (NSUInteger)ceil(visibleWidth / itemWidth);
     _stopIndex = MIN(_startIndex + diffIndex, self.datas.count - 1);
-    NSUInteger lastIndex = self.datas.count - 1;
-    if (_startIndex + 3 >= lastIndex || _stopIndex == lastIndex) {
-        CGFloat lastCandleX = self.frame.size.width - (((CGFloat)lastIndex - (CGFloat)_startIndex) * itemWidth + self.startX + self.candleWidth / 2.0);
-        NSLog(@"[KLineChart][paintRange] scaleX=%f scrollX=%f itemWidth=%f startIndex=%lu stopIndex=%lu lastIndex=%lu startX=%f lastCandleX=%f frameWidth=%f",
-              _scaleX,
-              _scrollX,
-              itemWidth,
-              (unsigned long)_startIndex,
-              (unsigned long)_stopIndex,
-              (unsigned long)lastIndex,
-              self.startX,
-              lastCandleX,
-              self.frame.size.width);
-    }
     _mMainMaxValue = -CGFLOAT_MAX;
     _mMainMinValue = CGFLOAT_MAX;
     _mMainHighMaxValue = -CGFLOAT_MAX;
