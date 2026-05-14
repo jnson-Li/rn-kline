@@ -24,7 +24,7 @@
         self.contentPadding = 20;
         self.isLine = isLine;
         self.state = state;
-        CGFloat diff = maxValue - minValue;
+        CGFloat diff = self.maxValue - self.minValue;
         CGFloat newscaly = 1;
         CGFloat newDiff = 0;
         CGFloat value = 0;

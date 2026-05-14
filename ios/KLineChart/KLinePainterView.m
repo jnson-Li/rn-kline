@@ -64,7 +64,17 @@
 }
 -(void)setScaleX:(CGFloat)scaleX {
     _scaleX = scaleX;
-    self.candleWidth = scaleX * ChartStyle_candleWidth;
+    CGFloat baseCandleWidth = self.baseCandleWidth > 0 ? self.baseCandleWidth : ChartStyle_candleWidth;
+    self.candleWidth = scaleX * baseCandleWidth;
+    [self setNeedsDisplay];
+}
+
+- (void)setBaseCandleWidth:(CGFloat)baseCandleWidth {
+    if (baseCandleWidth <= 0) {
+        return;
+    }
+    _baseCandleWidth = baseCandleWidth;
+    self.candleWidth = self.scaleX * baseCandleWidth;
     [self setNeedsDisplay];
 }
 - (void)setIsLongPress:(BOOL)isLongPress {
@@ -208,6 +218,7 @@
 {
     self = [super initWithFrame:frame];
     if (self) {
+        _baseCandleWidth = ChartStyle_candleWidth;
         self.datas = datas;
         self.scrollX = scrollX;
         self.isLine = isLine;
@@ -215,7 +226,7 @@
         self.isLongPress = isLongPress;
         self.mainState = mainState;
         self.secondaryState = secondaryState;
-        self.candleWidth = ChartStyle_candleWidth * self.scaleX;
+        self.candleWidth = self.baseCandleWidth * self.scaleX;
         self.gridColumns = ChartStyle_gridColumns;
         self.gridRows = ChartStyle_gridRows;
         self.backgroundFillTopColor = [UIColor rgb_r:0x0E g:0x0E b:0x0E alpha:1];
@@ -313,10 +324,29 @@
             _startIndex = (NSUInteger)(floor(_scrollX / itemWidth));
             offsetX = (CGFloat)_startIndex * itemWidth - _scrollX;
         }
+        if (_startIndex >= self.datas.count) {
+            _startIndex = self.datas.count - 1;
+            offsetX = (CGFloat)_startIndex * itemWidth - _scrollX;
+        }
         self.startX = offsetX;
     }
-    NSUInteger diffIndex = (NSUInteger)(ceil(self.frame.size.width - self.startX) / itemWidth);
+    CGFloat visibleWidth = MAX(self.frame.size.width - self.startX + itemWidth, 0);
+    NSUInteger diffIndex = (NSUInteger)ceil(visibleWidth / itemWidth);
     _stopIndex = MIN(_startIndex + diffIndex, self.datas.count - 1);
+    NSUInteger lastIndex = self.datas.count - 1;
+    if (_startIndex + 3 >= lastIndex || _stopIndex == lastIndex) {
+        CGFloat lastCandleX = self.frame.size.width - (((CGFloat)lastIndex - (CGFloat)_startIndex) * itemWidth + self.startX + self.candleWidth / 2.0);
+        NSLog(@"[KLineChart][paintRange] scaleX=%f scrollX=%f itemWidth=%f startIndex=%lu stopIndex=%lu lastIndex=%lu startX=%f lastCandleX=%f frameWidth=%f",
+              _scaleX,
+              _scrollX,
+              itemWidth,
+              (unsigned long)_startIndex,
+              (unsigned long)_stopIndex,
+              (unsigned long)lastIndex,
+              self.startX,
+              lastCandleX,
+              self.frame.size.width);
+    }
     _mMainMaxValue = -CGFLOAT_MAX;
     _mMainMinValue = CGFLOAT_MAX;
     _mMainHighMaxValue = -CGFLOAT_MAX;

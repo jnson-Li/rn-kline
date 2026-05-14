@@ -8,6 +8,7 @@
 
 #import "BaseChartRenderer.h"
 #import "ChartStyle.h"
+#import <math.h>
 
 
 @implementation BaseChartRenderer
@@ -26,7 +27,18 @@
         self.candleWidth = candleWidth;
         self.topPadding = topPadding;
         self.legendMarginLeft = ChartStyle_legendMarginLeft;
-        _scaleY = (chartRect.size.height - topPadding) / (maxValue - minValue);
+        CGFloat diff = maxValue - minValue;
+        if (!isfinite(diff) || fabs(diff) < 0.000001) {
+            CGFloat padding = fabs(maxValue) * 0.01;
+            if (padding < 1.0) {
+                padding = 1.0;
+            }
+            self.maxValue = maxValue + padding;
+            self.minValue = minValue - padding;
+            diff = self.maxValue - self.minValue;
+        }
+        CGFloat drawableHeight = chartRect.size.height - topPadding;
+        _scaleY = drawableHeight > 0 ? drawableHeight / diff : 0;
     }
     return self;
 }
