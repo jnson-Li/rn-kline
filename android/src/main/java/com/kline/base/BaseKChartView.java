@@ -62,7 +62,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     /**
      * 是否以动画的方式绘制最后一根线
      */
-    protected boolean isAnimationLast = true;
+    protected boolean isAnimationLast = false;
     /**
      * 是否以动画的方式绘制最后一根线
      */
