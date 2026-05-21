@@ -498,33 +498,51 @@ public class MainRenderer extends BaseRenderer {
                                   float maxX, float mainHighMaxValue,
                                   float minX, float mainLowMinValue) {
         if ((view.getKlineStatus()!= Status.KLINE_SHOW_TIME_LINE)) {
-            //绘制最大值和最小值
-            float y = view.getMainY(mainLowMinValue);
-            //计算显示位置
-            y = fixTextYBaseBottom(y);
-            String LowString;
-            float stringWidth, screenMid = view.getTranslationScreenMid();
-            if (minX < screenMid) {
-                LowString = "── " + getValueFormatter().format(mainLowMinValue);
-            } else {
-                LowString = getValueFormatter().format(mainLowMinValue) + " ──";
-                stringWidth = maxMinPaint.measureText(LowString);
-                minX -= stringWidth;
+            boolean hasLowValue = isValidLimitValue(mainLowMinValue);
+            boolean hasHighValue = isValidLimitValue(mainHighMaxValue);
+            if (!hasLowValue && !hasHighValue) {
+                return;
             }
-            canvas.drawText(LowString, minX, y, maxMinPaint);
 
-            y = view.getMainY(mainHighMaxValue);
-            String highString;
-            y = fixTextYBaseBottom(y);
-            if (maxX < screenMid) {
-                highString = "── " + getValueFormatter().format(mainHighMaxValue);
-            } else {
-                highString = getValueFormatter().format(mainHighMaxValue) + " ──";
-                stringWidth = maxMinPaint.measureText(highString);
-                maxX -= stringWidth;
+            //绘制最大值和最小值
+            float stringWidth, screenMid = view.getTranslationScreenMid();
+            if (hasLowValue) {
+                float y = view.getMainY(mainLowMinValue);
+                //计算显示位置
+                y = fixTextYBaseBottom(y);
+                String LowString;
+                if (minX < screenMid) {
+                    LowString = "── " + getValueFormatter().format(mainLowMinValue);
+                } else {
+                    LowString = getValueFormatter().format(mainLowMinValue) + " ──";
+                    stringWidth = maxMinPaint.measureText(LowString);
+                    minX -= stringWidth;
+                }
+                canvas.drawText(LowString, minX, y, maxMinPaint);
             }
-            canvas.drawText(highString, maxX, y, maxMinPaint);
+
+            if (hasHighValue) {
+                float y = view.getMainY(mainHighMaxValue);
+                String highString;
+                y = fixTextYBaseBottom(y);
+                if (maxX < screenMid) {
+                    highString = "── " + getValueFormatter().format(mainHighMaxValue);
+                } else {
+                    highString = getValueFormatter().format(mainHighMaxValue) + " ──";
+                    stringWidth = maxMinPaint.measureText(highString);
+                    maxX -= stringWidth;
+                }
+                canvas.drawText(highString, maxX, y, maxMinPaint);
+            }
         }
+    }
+
+    private boolean isValidLimitValue(float value) {
+        return !Float.isNaN(value)
+                && !Float.isInfinite(value)
+                && value != Float.MAX_VALUE
+                && value != -Float.MAX_VALUE
+                && value != Float.MIN_VALUE;
     }
 
 
