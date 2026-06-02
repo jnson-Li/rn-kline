@@ -12,9 +12,20 @@
 #import "KLineInfoView.h"
 #import <math.h>
 
-@interface KLineChartView()
+/// 超过该位移后才判定横/纵方向，避免轻微抖动误判。
+static const CGFloat kKLinePanDirectionLockThreshold = 6.0;
+/// 仅当纵向位移明显大于横向时才交给外层 ScrollView（避免左滑 K 线时误触发页面下滚）。
+static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
+
+@interface KLineChartView () <UIGestureRecognizerDelegate>
 @property(nonatomic,strong) KLinePainterView *painterView;
 @property(nonatomic,strong) KLineInfoView *infoView;
+
+@property(nonatomic,strong) UIPanGestureRecognizer *panGesture;
+@property(nonatomic,strong) UILongPressGestureRecognizer *longPressGesture;
+@property(nonatomic,strong) UIPinchGestureRecognizer *pinchGesture;
+@property(nonatomic,assign) BOOL panGestureAxisLocked;
+@property(nonatomic,assign) BOOL panGestureIsHorizontal;
 
 @property(nonatomic,assign) CGFloat maxScroll;
 @property(nonatomic,assign) CGFloat minScroll;
@@ -256,14 +267,111 @@
                 weakSelf.infoView.frame = CGRectMake(weakSelf.frame.size.width - weakSelf.infoView.frame.size.width - padding, 30,  weakSelf.infoView.frame.size.width,  weakSelf.infoView.frame.size.height);
             }
         };
-        UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragKlineEvent:)];
-        UILongPressGestureRecognizer *longGresture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressKlineEvent:)];
-        UIPinchGestureRecognizer *pinGesture = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(secalXEvent:)];
-        [_painterView addGestureRecognizer:panGesture];
-        [_painterView addGestureRecognizer:longGresture];
-        [_painterView addGestureRecognizer:pinGesture];
+        _panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragKlineEvent:)];
+        _panGesture.delegate = self;
+        _panGesture.cancelsTouchesInView = YES;
+        _longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressKlineEvent:)];
+        _pinchGesture = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(secalXEvent:)];
+        [_painterView addGestureRecognizer:_panGesture];
+        [_painterView addGestureRecognizer:_longPressGesture];
+        [_painterView addGestureRecognizer:_pinchGesture];
     }
     return self;
+}
+
+- (BOOL)isGestureFromScrollView:(UIGestureRecognizer *)gesture {
+    UIView *view = gesture.view;
+    while (view != nil) {
+        if ([view isKindOfClass:[UIScrollView class]]) {
+            return YES;
+        }
+        view = view.superview;
+    }
+    return NO;
+}
+
+- (void)failPanGestureForParentScroll:(UIPanGestureRecognizer *)gesture {
+    self.panGestureAxisLocked = YES;
+    self.panGestureIsHorizontal = NO;
+    _isDrag = NO;
+    if (gesture.state == UIGestureRecognizerStatePossible
+        || gesture.state == UIGestureRecognizerStateBegan
+        || gesture.state == UIGestureRecognizerStateChanged) {
+        gesture.enabled = NO;
+        gesture.enabled = YES;
+    }
+}
+
+- (BOOL)isVerticalDominantPanWithAbsX:(CGFloat)absX absY:(CGFloat)absY {
+    return absY > absX * kKLinePanVerticalDominanceRatio;
+}
+
+- (BOOL)lockPanGestureAxisIfNeeded:(UIPanGestureRecognizer *)gesture {
+    if (self.panGestureAxisLocked) {
+        return self.panGestureIsHorizontal;
+    }
+
+    CGPoint translation = [gesture translationInView:self.painterView];
+    CGFloat absX = fabs(translation.x);
+    CGFloat absY = fabs(translation.y);
+
+    if (absX < kKLinePanDirectionLockThreshold && absY < kKLinePanDirectionLockThreshold) {
+        return NO;
+    }
+
+    self.panGestureAxisLocked = YES;
+    if ([self isVerticalDominantPanWithAbsX:absX absY:absY]) {
+        [self failPanGestureForParentScroll:gesture];
+        return NO;
+    }
+
+    self.panGestureIsHorizontal = YES;
+    CGPoint point = [gesture locationInView:self.painterView];
+    self.rightBlankFactor = 2.0;
+    [self initIndicatirs];
+    _dragbeginX = point.x;
+    _isDrag = YES;
+    _lastScrollX = self.scrollX;
+    return YES;
+}
+
+#pragma mark - UIGestureRecognizerDelegate
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer == self.panGesture) {
+        self.panGestureAxisLocked = NO;
+        self.panGestureIsHorizontal = NO;
+        _isDrag = NO;
+
+        UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)gestureRecognizer;
+        CGPoint velocity = [pan velocityInView:self.painterView];
+        CGFloat absVelX = fabs(velocity.x);
+        CGFloat absVelY = fabs(velocity.y);
+        if (absVelX > 0.01 || absVelY > 0.01) {
+            if (absVelY > absVelX * kKLinePanVerticalDominanceRatio) {
+                return NO;
+            }
+        }
+    }
+    return YES;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    // 不与父 ScrollView 同时识别，避免左滑 K 线时外层跟着上下滚。
+    return NO;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    if (gestureRecognizer != self.panGesture) {
+        return NO;
+    }
+    if (![self isGestureFromScrollView:otherGestureRecognizer]) {
+        return NO;
+    }
+    // 已判定为横向拖动时，父 ScrollView 需等待图表 pan 结束，避免抢手势。
+    return self.panGestureAxisLocked && self.panGestureIsHorizontal;
 }
 
 
@@ -306,29 +414,45 @@
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
         {
-            CGPoint point = [gesture locationInView:self.painterView];
-            self.rightBlankFactor = 2.0;
-            [self initIndicatirs];
-            _dragbeginX = point.x;
-            _isDrag = true;
+            self.panGestureAxisLocked = NO;
+            self.panGestureIsHorizontal = NO;
+            _isDrag = NO;
         } break;
         case UIGestureRecognizerStateChanged:
         {
+            if (![self lockPanGestureAxisIfNeeded:gesture]) {
+                return;
+            }
             CGPoint point = [gesture locationInView:self.painterView];
             CGFloat dragX = point.x - _dragbeginX;
             self.scrollX = [self clamp:_lastScrollX + dragX min:_minScroll max:_maxScroll];
         } break;
         case UIGestureRecognizerStateEnded:
         {
+            if (!self.panGestureIsHorizontal) {
+                self.panGestureAxisLocked = NO;
+                self.panGestureIsHorizontal = NO;
+                _isDrag = NO;
+                break;
+            }
             CGPoint speed = [gesture velocityInView:self.painterView];
             self.speedX = speed.x;
             _isDrag = false;
             self.lastScrollX = self.scrollX;
+            self.panGestureAxisLocked = NO;
+            self.panGestureIsHorizontal = NO;
             if(speed.x != 0) {
                 _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(refreshEvent:)];
                 [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
             }
         }break;
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+        {
+            _isDrag = NO;
+            self.panGestureAxisLocked = NO;
+            self.panGestureIsHorizontal = NO;
+        } break;
         default:
             break;
     }

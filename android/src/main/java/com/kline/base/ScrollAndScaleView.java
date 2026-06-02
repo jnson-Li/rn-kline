@@ -5,6 +5,7 @@ import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.ViewConfiguration;
 import android.widget.OverScroller;
 import android.widget.RelativeLayout;
 
@@ -25,6 +26,8 @@ import com.kline.utils.Status;
 public abstract class ScrollAndScaleView extends RelativeLayout implements
         GestureDetector.OnGestureListener,
         ScaleGestureDetector.OnScaleGestureListener {
+    private static final float PAN_VERTICAL_DOMINANCE_RATIO = 2.0f;
+
     protected int scrollX = 0;
     protected androidx.core.view.GestureDetectorCompat gestureDetector;
     protected ScaleGestureDetector scaleDetector;
@@ -51,6 +54,18 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
 
     private boolean isScaleEnable = true;
 
+    private int touchSlop;
+
+    private float touchDownX;
+
+    private float touchDownY;
+
+    private boolean panAxisLocked = false;
+
+    private boolean panGestureIsHorizontal = false;
+
+    private boolean panGestureIsVertical = false;
+
     public ScrollAndScaleView(Context context) {
         super(context);
         init();
@@ -71,6 +86,7 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
         gestureDetector = new GestureDetectorCompat(getContext(), this);
         scaleDetector = new ScaleGestureDetector(getContext(), this);
         overScroller = new OverScroller(getContext());
+        touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
     }
 
     @Override
@@ -125,11 +141,14 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
         if (drawShapeEnable) {
             return changeDrawShape(e1, e2, distanceX, distanceY);
         } else {
+            if (panGestureIsVertical) {
+                return false;
+            }
             if (isTapShow) {
                 showSelected = false;
                 isTapShow = false;
             }
-            if (!showSelected && !isMultipleTouch() && isScrollEnable()) {
+            if (!showSelected && !isMultipleTouch() && isScrollEnable() && panGestureIsHorizontal) {
                 scrollBy(Math.round(distanceX), 0);
                 return true;
             }
@@ -153,7 +172,7 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
 
-        if (!showSelected && !isTouch() && isScrollEnable()) {
+        if (!showSelected && !isTouch() && isScrollEnable() && panGestureIsHorizontal) {
             overScroller.fling(scrollX, 0
                     , Math.round(velocityX / scaleX / 2), 0,
                     Integer.MIN_VALUE, Integer.MAX_VALUE,
@@ -238,14 +257,27 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
         if (event.getPointerCount() > 1) {
             showSelected = false;
             setSelectedIndex(-1);
+            panAxisLocked = true;
+            panGestureIsHorizontal = true;
+            panGestureIsVertical = false;
+            getParent().requestDisallowInterceptTouchEvent(true);
         }
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
+                touchDownX = event.getX();
+                touchDownY = event.getY();
+                panAxisLocked = false;
+                panGestureIsHorizontal = false;
+                panGestureIsVertical = false;
+                getParent().requestDisallowInterceptTouchEvent(false);
                 changeDrawShape(event, null, 0, 0);
                 setForceStopSlid(false);
                 touch = true;
                 break;
             case MotionEvent.ACTION_MOVE:
+                if (!isMultipleTouch() && !lockPanAxisIfNeeded(event)) {
+                    return false;
+                }
                 //长按之后移动
                 if (showSelected) {
                     onSelectedChange(event);
@@ -256,22 +288,64 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
                 break;
             case MotionEvent.ACTION_UP:
                 touch = false;
+                getParent().requestDisallowInterceptTouchEvent(false);
                 changeDrawShape(event, event, 0, 0);
                 invalidate();
+                resetPanAxisLock();
                 break;
             case MotionEvent.ACTION_CANCEL:
                 showSelected = false;
                 setSelectedIndex(-1);
                 touch = false;
+                getParent().requestDisallowInterceptTouchEvent(false);
                 invalidate();
+                resetPanAxisLock();
                 break;
             default:
                 break;
         }
         isMultipleTouch = event.getPointerCount() > 1;
+        if (panGestureIsVertical) {
+            return false;
+        }
         this.gestureDetector.onTouchEvent(event);
         this.scaleDetector.onTouchEvent(event);
         return true;
+    }
+
+    private boolean lockPanAxisIfNeeded(MotionEvent event) {
+        if (panAxisLocked) {
+            return !panGestureIsVertical;
+        }
+
+        float absX = Math.abs(event.getX() - touchDownX);
+        float absY = Math.abs(event.getY() - touchDownY);
+
+        if (absX < touchSlop && absY < touchSlop) {
+            return true;
+        }
+
+        panAxisLocked = true;
+        if (absY > absX * PAN_VERTICAL_DOMINANCE_RATIO) {
+            panGestureIsVertical = true;
+            panGestureIsHorizontal = false;
+            touch = false;
+            showSelected = false;
+            setSelectedIndex(-1);
+            getParent().requestDisallowInterceptTouchEvent(false);
+            return false;
+        }
+
+        panGestureIsHorizontal = true;
+        panGestureIsVertical = false;
+        getParent().requestDisallowInterceptTouchEvent(true);
+        return true;
+    }
+
+    private void resetPanAxisLock() {
+        panAxisLocked = false;
+        panGestureIsHorizontal = false;
+        panGestureIsVertical = false;
     }
 
     public void setSelectedIndex(int selectedIndex) {
