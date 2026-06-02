@@ -22,6 +22,7 @@ import com.kline.callback.SlidListener
 import com.kline.formatter.DateFormatter
 import com.kline.formatter.ValueFormatter
 import com.kline.model.KLineEntity
+import com.kline.utils.DpUtil
 import com.kline.view.KChartView
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -505,7 +506,12 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
 
   @ReactProp(name = "legendMarginLeft")
   override fun setLegendMarginLeft(view: LinearLayout?, value: Float) {
-    _chartView?.setLegendMarginLeft(value)
+    val chartView = _chartView ?: return
+    if (value <= 0f) {
+      return
+    }
+    val context = view?.context ?: chartView.context
+    chartView.setLegendMarginLeft(DpUtil.Dp2Px(context, value).toFloat())
   }
 
   @ReactProp(name = "increaseColor")

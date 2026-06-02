@@ -207,6 +207,21 @@
   [self setNeedsDisplay];
 }
 
+- (void)setLegendMarginLeft:(CGFloat)legendMarginLeft {
+    _legendMarginLeft = legendMarginLeft;
+    CGFloat resolved = legendMarginLeft > 0 ? legendMarginLeft : ChartStyle_legendMarginLeft;
+    if (_mainRenderer != nil) {
+        _mainRenderer.legendMarginLeft = resolved;
+    }
+    if (_volRenderer != nil) {
+        _volRenderer.legendMarginLeft = resolved;
+    }
+    if (_seconderyRender != nil) {
+        _seconderyRender.legendMarginLeft = resolved;
+    }
+    [self setNeedsDisplay];
+}
+
 - (instancetype)initWithFrame:(CGRect)frame
                         datas:(NSArray<KLineModel *> *)datas
                       scrollX:(CGFloat)scrollX
