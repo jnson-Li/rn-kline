@@ -69,6 +69,21 @@ RCT_EXPORT_MODULE()
 
 - (void)resetData:(nonnull NSArray *)list resetShowPosition:(nonnull NSNumber *)resetShowPosition resetLastAnim:(nonnull NSNumber *)resetLastAnim
 {
+  // 重置历史数据（切周期/币对）时清除选中态：现在选中态在松手后会保留，
+  // 不清除会把旧十字线/信息框带到新数据上（changeLast 实时 tick 不走这里，不受影响）
+  KLineChartView *selChart = [KLineStateManager manager].klineChart;
+  if (selChart != nil) {
+    [selChart clearSelectedState];
+  }
+  if (list.count == 0) {
+    [[KLineStateManager manager] setDatas:@[]];
+    KLineChartView *chart = [KLineStateManager manager].klineChart;
+    if (chart != nil) {
+      chart.scrollX = 0;
+    }
+    return;
+  }
+
   NSMutableArray *datas = [[NSMutableArray alloc] init];
   for (int i = 0; i < list.count; i++) {
     NSDictionary *item = list[i];
@@ -79,6 +94,7 @@ RCT_EXPORT_MODULE()
     bar.close = [item[@"close"] floatValue];
     bar.vol = [item[@"vol"] floatValue];
     bar.id = [item[@"id"] doubleValue];
+    bar.isPad = [item[@"isPad"] boolValue];
     [datas addObject:bar];
   }
   // iOS 需要倒序

@@ -1,7 +1,7 @@
 import { useRef, forwardRef, useImperativeHandle } from 'react';
 import type { NativeProps } from './KlineViewNativeComponent';
 import type { KLineEntity, Spec } from './NativeKlineAdapter';
-import KlineView from './KlineViewNativeComponent';
+import KlineView, { CrossFollowTouch } from './KlineViewNativeComponent';
 import KlineAdapter from './NativeKlineAdapter';
 
 export * from './KlineViewNativeComponent';
@@ -52,6 +52,11 @@ export const KLineChart = forwardRef<KLineChartRef, KLineChartProps>(
       },
     }));
 
-    return <KlineView {...props} />;
+    return (
+      <KlineView
+        crossFollowTouch={CrossFollowTouch.TOUCH_FOLLOW_FINGERS}
+        {...props}
+      />
+    );
   }
 );

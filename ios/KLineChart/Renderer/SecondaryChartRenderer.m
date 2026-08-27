@@ -9,6 +9,7 @@
 #import "SecondaryChartRenderer.h"
 #import "ChartStyle.h"
 #import "NSString+Rect.h"
+#import <math.h> // isnan：MACD 预热区 DIF/DEA 用 NAN 占位，需据此跳过连线与图例
 
 @interface SecondaryChartRenderer()
 
@@ -97,7 +98,9 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
 {
     CGFloat maxdY = [self getY:curPoint.macd];
     CGFloat zeroy = [self getY:0];
-    if(curPoint.macd > 0) {
+    // 对齐 Android MACDRenderer.drawMACD 的取色边界（macd >= 0 用涨色）：
+    // iOS 原来用 macd > 0，macd 恰好为 0 的柱子会被判成跌色，与安卓相反。
+    if(curPoint.macd >= 0) {
          CGContextSetStrokeColorWithColor(context, increaseColor.CGColor);
     } else {
         CGContextSetStrokeColorWithColor(context, decreaseColor.CGColor);
@@ -107,10 +110,11 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
     CGContextAddLineToPoint(context, curX, zeroy);
     CGContextDrawPath(context, kCGPathStroke);
     if(lastPoint != nil) {
-        if(curPoint.dif != 0) {
+        // 预热区 DIF/DEA 为 NAN（未计算）；两端都算出来了才连线，避免连到 NAN 端点
+        if(!isnan(curPoint.dif) && !isnan(lastPoint.dif)) {
              [self drawLine:context lastValue:lastPoint.dif curValue:curPoint.dif curX:curX color:ChartColors_difColor];
         }
-        if(curPoint.dea != 0) {
+        if(!isnan(curPoint.dea) && !isnan(lastPoint.dea)) {
              [self drawLine:context lastValue:lastPoint.dea curValue:curPoint.dea curX:curX color:ChartColors_deaColor];
         }
     }
@@ -146,12 +150,12 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
                  NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: ChartColors_macdColor}];
                  [topAttributeText appendAttributedString:attr];
              }
-            if(curPoint.dif != 0) {
+            if(!isnan(curPoint.dif)) {
                  NSString *str = [[NSString stringWithFormat:[@"DIF:" stringByAppendingString: mainValueFormatter], curPoint.dif] stringByAppendingString:@"    "];
                  NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: ChartColors_difColor}];
                  [topAttributeText appendAttributedString:attr];
              }
-            if(curPoint.dea != 0) {
+            if(!isnan(curPoint.dea)) {
                  NSString *str = [NSString stringWithFormat:[@"DEA:" stringByAppendingString: mainValueFormatter], curPoint.dea];
                  NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: ChartColors_deaColor}];
                  [topAttributeText appendAttributedString:attr];

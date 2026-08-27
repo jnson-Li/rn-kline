@@ -94,7 +94,7 @@ public class VolumeRenderer extends BaseRenderer {
         if (0 != vol && top > bottom - 2) {
             top = bottom - 2;
         }
-        if ((view.getKlineStatus() == Status.KLINE_SHOW_TIME_LINE) || view.getVolChartStatus() == Status.VOL_SHOW_VERTICAL_BAR) {
+        if (view.getVolChartStatus() == Status.VOL_SHOW_VERTICAL_BAR) {
             canvas.drawRect(curX - lineVolWidth, top, curX + lineVolWidth, bottom, linePaint);
         } else if (close >= open) {//涨
             canvas.drawRect(curX - r, top, curX + r, bottom, increasePaint);

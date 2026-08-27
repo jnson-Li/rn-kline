@@ -275,12 +275,15 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
                 touch = true;
                 break;
             case MotionEvent.ACTION_MOVE:
+                // 长按进入选中态后，X/Y 都交给十字线连续跟随；不能再按普通滚动手势
+                // 做方向锁，否则首次纵向拖动会清掉选中态，交点无法跟手。
+                if (showSelected && !isMultipleTouch()) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    onSelectedChange(event);
+                    break;
+                }
                 if (!isMultipleTouch() && !lockPanAxisIfNeeded(event)) {
                     return false;
-                }
-                //长按之后移动
-                if (showSelected) {
-                    onSelectedChange(event);
                 }
                 break;
             case MotionEvent.ACTION_POINTER_UP:
@@ -350,6 +353,18 @@ public abstract class ScrollAndScaleView extends RelativeLayout implements
 
     public void setSelectedIndex(int selectedIndex) {
         this.selectedIndex = selectedIndex;
+    }
+
+    /**
+     * 清除选中态（十字线 + 选中信息框）。
+     * 选中态在松手后会保留，所以切周期/币对 resetData 时必须主动清掉。
+     * isTapShow 是 private，只能在本类清：漏掉它会让下一次长按选中后「单击取消」失效
+     * （onSingleTapUp 会走到重新选中分支），且拖动会被误判成取消选中并滚动图表。
+     */
+    protected void clearSelectedState() {
+        showSelected = false;
+        isTapShow = false;
+        setSelectedIndex(-1);
     }
 
     /**

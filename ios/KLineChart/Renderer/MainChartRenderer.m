@@ -9,6 +9,7 @@
 #import "MainChartRenderer.h"
 #import "ChartStyle.h"
 #import "NSString+Rect.h"
+#import <math.h> // isnan / NAN：MA 未计算态用 NAN 占位
 @interface MainChartRenderer()
 @property(nonatomic,assign) BOOL isLine;
 @property(nonatomic,assign) CGFloat contentPadding;
@@ -37,6 +38,18 @@
             self.scaleY = newscaly;
             self.maxValue += value;
             self.minValue -= value;
+            // 价格轴不应出现负数刻度。Android 端 BaseKChartView.calcValues() 对同一段 padding
+            // 有 `padding < mainMinValue ? mainMinValue - padding : 0` 的兜底，iOS 缺了这一步，
+            // 于是 min 很小时（新币首月 low=0.10452，或被后端全 0 占位 K 线拉到 0）
+            // 会画出 -0.687 这种负价格刻度，且与 Android 表现不一致。
+            // 注意不能只把 minValue 夹到 0：drawRightText 用 `position/scaleY + minValue` 生成刻度，
+            // getY 用 `scaleY*(maxValue-value)`，两者要求 maxValue-minValue == height/scaleY。
+            // 所以这里把区间整体上移（max、min 加同一个量），宽度不变 => 刻度与 K 线不会错位，
+            // 且只向上扩展，不可能裁掉任何一根 K 线。
+            if (self.minValue < 0) {
+                self.maxValue -= self.minValue;
+                self.minValue = 0;
+            }
         }
     }
     return self;
@@ -133,13 +146,15 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
 }
 
 - (void)drawMaLine:(CGContextRef)context lastPoit:(KLineModel *)lastPoint curPoint:(KLineModel *)curPoint curX:(CGFloat)curX {
-    if(curPoint.MA5Price != 0) {
+    // 用 isnan 区分「未计算」与「算出来就是 0」：MA 恰为 0（上市前全 0 段）也要连线，
+    // 否则该段 MA 线会断开（与 Android 不一致）。两端都已计算才连线，避免把 NAN 传给 getY。
+    if(!isnan(curPoint.MA5Price) && !isnan(lastPoint.MA5Price)) {
         [self drawLine:context lastValue:lastPoint.MA5Price curValue:curPoint.MA5Price curX:curX color:self.ma1Color ?: [UIColor colorWithCGColor:ChartColors_ma5Color.CGColor]];
     }
-    if(curPoint.MA10Price != 0) {
+    if(!isnan(curPoint.MA10Price) && !isnan(lastPoint.MA10Price)) {
            [self drawLine:context lastValue:lastPoint.MA10Price curValue:curPoint.MA10Price curX:curX color:self.ma2Color ?: [UIColor colorWithCGColor:ChartColors_ma10Color.CGColor]];
     }
-    if(curPoint.MA30Price != 0) {
+    if(!isnan(curPoint.MA30Price) && !isnan(lastPoint.MA30Price)) {
            [self drawLine:context lastValue:lastPoint.MA30Price curValue:curPoint.MA30Price curX:curX color:self.ma3Color ?: [UIColor colorWithCGColor:ChartColors_ma30Color.CGColor]];
     }
 }
@@ -173,6 +188,13 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
     if(open > close) {
         color = increaseColor;
     }
+    // 对齐 Android renderCandle 的平 K 线分支（close - 1，用涨色）：
+    // open==close 时 iOS 的实体是零长度线段，CoreGraphics 什么都不画，
+    // 后端全 0 占位区间看起来像没有数据；这里强制 1pt 实体让它可见。
+    else if (open == close) {
+        color = increaseColor;
+        close = open - 1;
+    }
     
     CGContextSetStrokeColorWithColor(context, color.CGColor);
     CGContextSetLineWidth(context, ChartStyle_candleLineWidth);
@@ -192,17 +214,17 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
  mainValueFormatter:(NSString *)mainValueFormatter
        volFormatter:(NSString *)volFormatter{
     NSMutableAttributedString *topAttributeText = [[NSMutableAttributedString alloc] init];
-    if(curPoint.MA5Price != 0) {
+    if(!isnan(curPoint.MA5Price)) { // isnan=未计算才隐藏图例；算出来是 0 也照常显示
         NSString *str = [[NSString stringWithFormat:[@"MA5:" stringByAppendingString: mainValueFormatter],curPoint.MA5Price] stringByAppendingString:@"    "];
         NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: self.ma1Color ?: [UIColor colorWithCGColor:ChartColors_ma5Color.CGColor]}];
         [topAttributeText appendAttributedString:attr];
     }
-    if(curPoint.MA10Price != 0) {
+    if(!isnan(curPoint.MA10Price)) {
         NSString *str = [[NSString stringWithFormat:[@"MA10:" stringByAppendingString: mainValueFormatter],curPoint.MA10Price] stringByAppendingString:@"    "];
         NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: self.ma2Color ?: [UIColor colorWithCGColor:ChartColors_ma10Color.CGColor]}];
         [topAttributeText appendAttributedString:attr];
     }
-    if(curPoint.MA30Price != 0) {
+    if(!isnan(curPoint.MA30Price)) {
         NSString *str = [NSString stringWithFormat:[@"MA30:" stringByAppendingString: mainValueFormatter],curPoint.MA30Price];
         NSAttributedString *attr = [[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:ChartStyle_defaultTextSize],NSForegroundColorAttributeName: self.ma3Color ?: [UIColor colorWithCGColor:ChartColors_ma30Color.CGColor]}];
         [topAttributeText appendAttributedString:attr];

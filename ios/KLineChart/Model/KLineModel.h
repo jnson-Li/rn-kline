@@ -22,6 +22,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,assign) CGFloat amount;
 @property(nonatomic,assign) CGFloat count;
 @property(nonatomic,assign) double id;
+/** 占位 K 线标记：padSparsePeriodBars 为上市前补的空位，原生绘制/十字线跳过 */
+@property(nonatomic,assign) BOOL isPad;
 
 @property(nonatomic,assign) CGFloat MA5Price;
 @property(nonatomic,assign) CGFloat MA10Price;

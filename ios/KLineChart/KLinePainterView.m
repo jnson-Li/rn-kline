@@ -12,6 +12,18 @@
 #import "SecondaryChartRenderer.h"
 #import "ChartStyle.h"
 #import "NSString+Rect.h"
+#import <math.h> // isnan：MA 未计算态用 NAN 占位
+
+/// 见 ChartStyle.h：图表配色本来只有深色一套写死的 #define，这里存运行期主题标记。
+BOOL gKLineChartLightTheme = NO;
+
+/// 用背景色的感知亮度判断浅色主题（0.5 为界，和 W3C 的相对亮度近似公式一致）。
+static BOOL KLineColorIsLight(UIColor *color) {
+    if (color == nil) { return NO; }
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    if (![color getRed:&r green:&g blue:&b alpha:&a]) { return NO; }
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 0.5;
+}
 
 @interface KLinePainterView()
 @property(nonatomic,assign) CGFloat displayHeight;
@@ -104,6 +116,9 @@
 
 -(void)setBackgroundFillTopColor:(UIColor *)backgroundFillTopColor{
   _backgroundFillTopColor = backgroundFillTopColor;
+  // 背景色是 RN 侧唯一一个「一定会下发」的主题信号，用它反推浅色/深色，
+  // 让 ChartStyle.h 里的 ThemeColor() 宏跟着切换（坐标轴文字、十字线、最高最低价标签等）。
+  gKLineChartLightTheme = KLineColorIsLight(backgroundFillTopColor);
   [self setNeedsDisplay];
 }
 
@@ -262,7 +277,8 @@
         self.volMa1Color = [UIColor colorWithCGColor:ChartColors_ma5Color.CGColor];
         self.volMa2Color = [UIColor colorWithCGColor:ChartColors_ma10Color.CGColor];
         self.valueFormatter = @"%.03f";
-        self.volFormatter = @"%.03f";
+        // JS 不再下发 volFormatter，原生默认必须与 Android VolValueFormatter("%.3f") 一致
+        self.volFormatter = @"%.3f";
         self.dateTimeFormatter = @"MM-dd HH:mm";
         self.mainValueFormatter = @"%.03f";
     }
@@ -373,19 +389,20 @@
         CGFloat maxPrice = item.high;
         CGFloat minPrice = item.low;
         if (_mainState == MainStateMA) {
-        if(item.MA5Price != 0){
+        // 用 isnan 判断「未计算」：算出来的 MA=0 要计入量程；且 NAN 一旦进 MAX/MIN 会把量程整段污染成 NAN
+        if(!isnan(item.MA5Price)){
           maxPrice = MAX(maxPrice, item.MA5Price);
           minPrice = MIN(minPrice, item.MA5Price);
         }
-        if(item.MA10Price != 0){
+        if(!isnan(item.MA10Price)){
           maxPrice = MAX(maxPrice, item.MA10Price);
           minPrice = MIN(minPrice, item.MA10Price);
         }
-        if(item.MA20Price != 0){
+        if(!isnan(item.MA20Price)){
           maxPrice = MAX(maxPrice, item.MA20Price);
           minPrice = MIN(minPrice, item.MA20Price);
         }
-        if(item.MA30Price != 0){
+        if(!isnan(item.MA30Price)){
           maxPrice = MAX(maxPrice, item.MA30Price);
           minPrice = MIN(minPrice, item.MA30Price);
         }
@@ -417,8 +434,20 @@
 
 -(void)getSecondaryMaxMinValue:(KLineModel *)item {
     if (_secondaryState == SecondaryStateMacd) {
-      _mSecondaryMaxValue = MAX(_mSecondaryMaxValue, MAX(item.macd, MAX(item.dif, item.dea)));
-      _mSecondaryMinValue = MIN(_mSecondaryMinValue, MIN(item.macd, MIN(item.dif, item.dea)));
+      // 预热区 DIF/DEA 为 NAN，必须逐项 isnan 跳过，否则 NAN 会污染 MACD 副图的自动缩放范围。
+      // macd 始终为实数（预热区为 0），保证 MAX/MIN 恒有有效参与项，不会出现全 NAN 窗口。
+      if (!isnan(item.macd)) {
+        _mSecondaryMaxValue = MAX(_mSecondaryMaxValue, item.macd);
+        _mSecondaryMinValue = MIN(_mSecondaryMinValue, item.macd);
+      }
+      if (!isnan(item.dif)) {
+        _mSecondaryMaxValue = MAX(_mSecondaryMaxValue, item.dif);
+        _mSecondaryMinValue = MIN(_mSecondaryMinValue, item.dif);
+      }
+      if (!isnan(item.dea)) {
+        _mSecondaryMaxValue = MAX(_mSecondaryMaxValue, item.dea);
+        _mSecondaryMinValue = MIN(_mSecondaryMinValue, item.dea);
+      }
     } else if (_secondaryState == SecondaryStateKDJ) {
       _mSecondaryMaxValue = MAX(_mSecondaryMaxValue, MAX(item.k, MAX(item.d, item.j)));
       _mSecondaryMinValue = MIN(_mSecondaryMinValue, MIN(item.k, MIN(item.d, item.j)));
@@ -475,6 +504,7 @@
 -(void)drawChart:(CGContextRef)context {
     for (NSUInteger index = _startIndex; index <= _stopIndex; index++) {
         KLineModel *curPoint = self.datas[index];
+        if (curPoint.isPad) { continue; }
         CGFloat itemWidth = _candleWidth + ChartStyle_canldeMargin;
         CGFloat curX = (CGFloat)(index - _startIndex) * itemWidth + _startX;
         CGFloat _curX = self.frame.size.width - curX - _candleWidth / 2;
@@ -552,30 +582,40 @@
     NSUInteger index = [self calculateIndexWithSelectX:self.longPressX];
     if([self outRangeIndex:index]) { return; }
     KLineModel *point = self.datas[index];
-    CGFloat itemWidth = _candleWidth + ChartStyle_canldeMargin;
-    CGFloat curX = self.frame.size.width - ((index - self.startIndex) * itemWidth + self.startX + self.candleWidth / 2);
-    CGContextSetStrokeColorWithColor(context, ChartColors_crossHlineColor.CGColor);
-    CGContextSetLineWidth(context, _candleWidth);
+    if (point.isPad) { return; }
+    // 索引仍用于详情数据和时间，但十字线 X/Y 使用真实触点，不再吸附到 K 线收盘价。
+    CGFloat curX = MIN(MAX(self.longPressX, 0), self.frame.size.width);
+    CGFloat y = MIN(MAX(self.longPressY, 0), self.frame.size.height);
+    CGFloat dashLengths[] = {4.0, 3.0};
+    CGContextSetLineDash(context, 0, dashLengths, 2);
+    CGContextSetStrokeColorWithColor(context, ChartColors_crossLineColor.CGColor);
+    CGContextSetLineWidth(context, 0.5);
     CGContextMoveToPoint(context, curX, 0);
     CGContextAddLineToPoint(context, curX, self.frame.size.height);
     CGContextDrawPath(context, kCGPathStroke);
     
-    CGFloat y = [self.mainRenderer getY:point.close];
-    
-    CGContextSetStrokeColorWithColor(context, [UIColor whiteColor].CGColor);
+    CGContextSetStrokeColorWithColor(context, ChartColors_crossLineColor.CGColor);
     CGContextSetLineWidth(context, 0.5);
     CGContextMoveToPoint(context, 0, y);
     CGContextAddLineToPoint(context, self.frame.size.width, y);
     CGContextDrawPath(context, kCGPathStroke);
+    CGContextSetLineDash(context, 0, NULL, 0);
     
-    CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+    CGContextSetFillColorWithColor(context, ChartColors_crossLineColor.CGColor);
     CGContextAddArc(context, curX, y, 2, 0, M_PI_2, true);
     CGContextDrawPath(context, kCGPathFill);
-    [self drawLongPressCrossLineText:context curPoint:point curX:curX y:y];
+    CGFloat crossPrice = self.mainRenderer.scaleY == 0
+        ? point.close
+        : self.mainRenderer.maxValue - (y - CGRectGetMinY(self.mainRenderer.chartRect)) / self.mainRenderer.scaleY;
+    [self drawLongPressCrossLineText:context curPoint:point curX:curX y:y crossPrice:crossPrice];
 }
 
--(void)drawLongPressCrossLineText:(CGContextRef)context curPoint:(KLineModel *)curPoint curX:(CGFloat)curX y:(CGFloat)y {
-    NSString *text = [NSString stringWithFormat:_mainValueFormatter,curPoint.close];
+-(void)drawLongPressCrossLineText:(CGContextRef)context
+                         curPoint:(KLineModel *)curPoint
+                             curX:(CGFloat)curX
+                                y:(CGFloat)y
+                       crossPrice:(CGFloat)crossPrice {
+    NSString *text = [NSString stringWithFormat:_mainValueFormatter,crossPrice];
     CGRect rect = [text getRectWithFontSize:ChartStyle_defaultTextSize];
     CGFloat padding = 3;
     CGFloat textHeight = rect.size.height + padding * 2;
@@ -592,7 +632,7 @@
         CGContextAddLineToPoint(context, self.frame.size.width, y - textHeight / 2);
         CGContextSetLineWidth(context, 1);
         CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
-        CGContextSetFillColorWithColor(context, ChartColors_markerBgColor.CGColor);
+        CGContextSetFillColorWithColor(context, ChartColors_selectedPriceBoxBgColor.CGColor);
         CGContextDrawPath(context, kCGPathFillStroke);
         [self.mainRenderer drawText:text atPoint:CGPointMake(self.frame.size.width - textWdith - 2, y - rect.size.height / 2) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
     } else {
@@ -606,7 +646,7 @@
         CGContextAddLineToPoint(context, 0, y - textHeight / 2);
         CGContextSetLineWidth(context, 1);
         CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
-        CGContextSetFillColorWithColor(context, ChartColors_markerBgColor.CGColor);
+        CGContextSetFillColorWithColor(context, ChartColors_selectedPriceBoxBgColor.CGColor);
         CGContextDrawPath(context, kCGPathFillStroke);
         [self.mainRenderer drawText:text atPoint:CGPointMake(2, y - rect.size.height / 2) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
     }
@@ -614,13 +654,103 @@
     NSString *dateText = [self calculateDateText:curPoint.id];
     CGRect dateRect = [dateText getRectWithFontSize:ChartStyle_defaultTextSize];
     CGFloat datepadding = 3;
-    CGContextSetStrokeColorWithColor(context, [UIColor whiteColor].CGColor);
-    CGContextSetFillColorWithColor(context, ChartColors_bgColor.CGColor);
+    CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
+    CGContextSetFillColorWithColor(context, ChartColors_selectedLabelBgColor.CGColor);
     CGContextAddRect(context, CGRectMake(curX - dateRect.size.width / 2 - datepadding, CGRectGetMinY(self.dateRect), dateRect.size.width + datepadding * 2, dateRect.size.height + datepadding * 2));
     CGContextDrawPath(context, kCGPathFillStroke);
     [self.mainRenderer drawText:dateText atPoint:CGPointMake(curX - dateRect.size.width  / 2, CGRectGetMinY(self.dateRect) + datepadding) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
-    self.showInfoBlock(curPoint, isLeft);
+    [self drawMarketInfoBox:context curPoint:curPoint isLeft:isLeft];
     [self drawTopText:context curPoint:curPoint];
+}
+
+-(void)drawMarketInfoBox:(CGContextRef)context curPoint:(KLineModel *)curPoint isLeft:(BOOL)isLeft {
+    if (self.hideMarketInfoBox) {
+        return;
+    }
+    if (self.selectedInfoLabels.count < 8) {
+        return;
+    }
+
+    NSString *priceFormat = self.mainValueFormatter.length > 0 ? self.mainValueFormatter : @"%.2f";
+    NSString *volFormat = self.volFormatter.length > 0 ? self.volFormatter : @"%.3f";
+    CGFloat diff = curPoint.close - curPoint.open;
+    NSString *sign = diff >= 0 ? @"+" : @"-";
+    UIColor *changeColor = diff >= 0 ? (self.increaseColor ?: ChartColors_upColor) : (self.decreaseColor ?: ChartColors_dnColor);
+
+    NSString *timeStr = [self calculateDateText:curPoint.id];
+    NSString *openStr = [NSString stringWithFormat:priceFormat, curPoint.open];
+    NSString *highStr = [NSString stringWithFormat:priceFormat, curPoint.high];
+    NSString *lowStr = [NSString stringWithFormat:priceFormat, curPoint.low];
+    NSString *closeStr = [NSString stringWithFormat:priceFormat, curPoint.close];
+    NSString *changeStr = [NSString stringWithFormat:@"%@%@", sign, [NSString stringWithFormat:priceFormat, fabs(diff)]];
+    CGFloat changePercent = curPoint.open != 0 ? (diff * 100.0) / curPoint.open : 0;
+    NSString *changeRateStr = [NSString stringWithFormat:@"%@%.2f%%", sign, fabs(changePercent)];
+    NSString *volStr = [_mainRenderer volFormat:curPoint.vol volFormatter:volFormat];
+
+    NSArray<NSString *> *values = @[timeStr, openStr, highStr, lowStr, closeStr, changeStr, changeRateStr, volStr];
+
+    CGFloat fontSize = ChartStyle_defaultTextSize;
+    CGFloat padding = 4;
+    CGFloat margin = 5;
+    CGFloat top = ChartStyle_topPadding;
+    CGFloat lineHeight = fontSize + 4;
+    CGFloat maxWidth = 0;
+
+    for (NSInteger i = 0; i < 8; i++) {
+        NSString *line = [NSString stringWithFormat:@"%@%@", self.selectedInfoLabels[i], values[i]];
+        CGRect rect = [line getRectWithFontSize:fontSize];
+        maxWidth = MAX(maxWidth, rect.size.width);
+    }
+
+    maxWidth += padding * 2;
+    CGFloat height = padding * 2 + lineHeight * 8;
+    NSString *maxAxisText = [NSString stringWithFormat:self.valueFormatter, self.mainRenderer.maxValue];
+    NSString *minAxisText = [NSString stringWithFormat:self.valueFormatter, self.mainRenderer.minValue];
+    CGFloat axisTextWidth = MAX([maxAxisText getRectWithFontSize:ChartStyle_reightTextSize].size.width,
+                                [minAxisText getRectWithFontSize:ChartStyle_reightTextSize].size.width);
+    // 6pt 是价格刻度自身右边距，另留 12pt 视觉间隔，避免右上详情框盖住价格。
+    CGFloat rightAxisReserve = axisTextWidth + 18.0;
+    CGFloat rightSideLeft = self.frame.size.width - rightAxisReserve - maxWidth - margin;
+    CGFloat left = isLeft ? margin : MAX(margin, rightSideLeft);
+    CGRect boxRect = CGRectMake(left, top, maxWidth, height);
+
+    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:boxRect cornerRadius:padding / 2.0];
+    CGContextAddPath(context, path.CGPath);
+    CGContextSetFillColorWithColor(context, ChartColors_markerBgColor.CGColor);
+    CGContextFillPath(context);
+    CGContextAddPath(context, path.CGPath);
+    CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
+    // 0.8 而不是 0.5，对齐 Android：selectorBorderPaint 的线宽来自 setLineWidth，
+    // 默认 0.8dp（KChartView.java 的 lineWidth attr），模拟器上实测是 2px 的 #DDDDDD。
+    // iOS 原来的 0.5pt 在 @3x 上只有 1.5px，抗锯齿摊成两行半透明像素后几乎看不见，
+    // 浅色主题下白框白底等于没有边框 —— QA 反馈的就是这个。
+    CGContextSetLineWidth(context, 0.8);
+    CGContextStrokePath(context);
+
+    // 标签左对齐、数值右对齐，与 Android MainRenderer.drawSelector 保持一致。
+    // 之前把「标签+数值」拼成一整行左对齐，而标签宽度不一（开/高/低/收 是 1 个字，
+    // 涨跌额/涨跌幅/成交量 是 3 个字），数值列因此参差不齐。
+    // 盒宽仍然按拼接后的整行取 max，所以右对齐的数值不可能压到标签上。
+    CGFloat right = left + maxWidth;
+    CGFloat y = top + padding;
+    for (NSInteger i = 0; i < 8; i++) {
+        // 标签恒用常规文字色，只有涨跌额/涨跌幅这两行的「数值」才染涨跌色 ——
+        // 与 Android MainRenderer.drawSelector 一致（它的 label 一律走 selectorTextPaint，
+        // 只有 strings[5]/[6] 走 upPaint/downPaint）。之前 iOS 把 label 也一起染了，
+        // 两端并排对比时 iOS 的「涨跌额」三个字是绿的、Android 是黑的。
+        UIColor *valueColor = (i == 5 || i == 6) ? changeColor : ChartColors_markerTextColor;
+        NSString *value = values[i];
+        CGFloat valueWidth = [value getRectWithFontSize:fontSize].size.width;
+        [self.mainRenderer drawText:self.selectedInfoLabels[i]
+                            atPoint:CGPointMake(left + padding, y)
+                           fontSize:fontSize
+                          textColor:ChartColors_markerTextColor];
+        [self.mainRenderer drawText:value
+                            atPoint:CGPointMake(right - padding - valueWidth, y)
+                           fontSize:fontSize
+                          textColor:valueColor];
+        y += lineHeight;
+    }
 }
 
 -(void)drawTopText:(CGContextRef)context curPoint:(KLineModel *)curPoint {
@@ -696,7 +826,9 @@
                 [self.mainRenderer drawText:text atPoint:CGPointMake(textX, textY) fontSize:fontSize textColor:_priceLabelRightTextColor];
 
         if(_isLine) {
-            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+            // 分时最新价圆点：同样不能写死白色，浅色底下会消失。这一段其余元素
+            // （虚线、边框、文字）都用 _priceLabelRightTextColor，圆点跟着它走。
+            CGContextSetFillColorWithColor(context, _priceLabelRightTextColor.CGColor);
             CGContextAddArc(context, self.frame.size.width + _scrollX - _candleWidth / 2, y, 2, 0, M_PI_2, true);
             CGContextDrawPath(context, kCGPathFill);
         }
@@ -763,6 +895,15 @@
     } else {
         return false;
     }
+}
+
+// 该横坐标能否选中：越界或 isPad 占位 K 线不可选中。
+// KLineChartView 手势入口用：避免选中态落在「画不出来」的 K 线上，
+// 造成看不见的十字线劫持横向滚动 / 图例被吞（对齐 Android onSelectedChange 的占位拦截）。
+-(BOOL)canSelectAtX:(CGFloat)selectX {
+    NSUInteger index = [self calculateIndexWithSelectX:selectX];
+    if ([self outRangeIndex:index]) { return NO; }
+    return !((KLineModel *)self.datas[index]).isPad;
 }
 
 -(NSString *)calculateDateText:(NSTimeInterval)time {

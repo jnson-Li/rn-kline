@@ -87,6 +87,9 @@ public class MainRenderer extends BaseRenderer {
 
     @Override
     public void render(Canvas canvas, float lastX, float curX, @NonNull BaseKChartView view, int position, float... values) {
+        if (view.isPadItem(position)) {
+            return;
+        }
         if (view.getKlineStatus() == Status.KLINE_SHOW_TIME_LINE) {
             if (position == itemCount - 1) {
                 float lastClosePrice = values[Constants.INDEX_CLOSE];
@@ -258,8 +261,10 @@ public class MainRenderer extends BaseRenderer {
 
         int index = view.getSelectedIndex();
 
-        // 详情面板展示完整时间
-        strings[0] = view.getTimeStr(index);
+        // 详情面板的时间必须和 X 轴、以及 iOS 端用同一个 dateTimeFormatter。
+        // 原来的 getTimeStr 硬编码 "MM/dd HH:mm"，完全无视 JS 下发的 dateTimeFormatter，
+        // 于是月线上 Android 显示 "07/01 09:00"、iOS 显示 "2026-07"，两端对不上。
+        strings[0] = view.getTime(index);
         strings[1] = getValueFormatter().format(values[Constants.INDEX_OPEN]);
         strings[2] = getValueFormatter().format(values[Constants.INDEX_HIGH]);
         strings[3] = getValueFormatter().format(values[Constants.INDEX_LOW]);
@@ -279,11 +284,12 @@ public class MainRenderer extends BaseRenderer {
         }
         width += padding * 2;
 
-        float x = view.getX(index) + view.getTranslateX();
+        float x = view.getSelectedTouchX();
         if (x > view.getChartWidth() / 2) {
             left = margin;
         } else {
-            left = view.getChartWidth() - width - margin;
+            float rightAxisReserve = view.getRightAxisReservedWidth();
+            left = Math.max(margin, view.getChartWidth() - width - margin - rightAxisReserve);
         }
 
         float right = left + width;

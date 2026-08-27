@@ -54,9 +54,18 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
       increaseColor:(UIColor *) increaseColor
       decreaseColor:(UIColor *) decreaseColor
 {
+    // 成交量为 0 不画柱：可见区间全是 0 量 K 线时（新币上市前的接口占位区），
+    // BaseChartRenderer 的 diff==0 兜底会把量程设为 [-1,+1]，getY(0) 落在面板中部，
+    // 每根 0 量柱都会被画成半高红柱，看起来像一堵假成交量墙。0 量本就无柱可画，直接跳过。
+    if (curPoint.vol == 0) {
+        return;
+    }
     CGFloat top = [self getY:curPoint.vol];
     CGContextSetLineWidth(context, self.candleWidth);
-    if(curPoint.close > curPoint.open) {
+    // 对齐安卓 VolumeRenderer：close >= open 记涨色（平盘/十字星 close==open 也算涨，用涨色）。
+    // iOS 原用 close > open（严格），导致 close==open 的平盘量柱落到跌色（红），与安卓相反——
+    // 新币上市初期大量 open==close 的平盘 K 线，成交量柱在 iOS 上全被画红，安卓却是绿。
+    if(curPoint.close >= curPoint.open) {
         CGContextSetStrokeColorWithColor(context, increaseColor.CGColor);
     } else {
         CGContextSetStrokeColorWithColor(context, decreaseColor.CGColor);

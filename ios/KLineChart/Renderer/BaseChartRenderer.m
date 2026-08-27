@@ -109,16 +109,26 @@
     return _scaleY * (_maxValue - value) + CGRectGetMinY(_chartRect) + _topPadding;
 }
 
+// 成交量不做固定精度补零：格式化后去掉小数尾部多余的 0 和孤立小数点
+// （0.00→0、1.50M→1.5M、1.45M/30.08 不变），与 Android VolValueFormatter 规则一致。
+static NSString *KLineTrimTrailingZeros(NSString *s) {
+    if ([s rangeOfString:@"."].location == NSNotFound) { return s; }
+    NSUInteger end = s.length;
+    while (end > 0 && [s characterAtIndex:end - 1] == '0') { end--; }
+    if (end > 0 && [s characterAtIndex:end - 1] == '.') { end--; }
+    return [s substringToIndex:end];
+}
+
 -(NSString *)volFormat:(CGFloat)value
           volFormatter:(NSString *)volFormatter{
     if (value > 10000 && value < 999999) {
          CGFloat d = value / 1000;
-         return  [NSString stringWithFormat:[volFormatter stringByAppendingString: @"K"],d];
+         return [KLineTrimTrailingZeros([NSString stringWithFormat:volFormatter,d]) stringByAppendingString:@"K"];
        } else if (value > 1000000) {
          CGFloat d = value / 1000000;
-         return [NSString stringWithFormat:[volFormatter stringByAppendingString: @"M"],d];
+         return [KLineTrimTrailingZeros([NSString stringWithFormat:volFormatter,d]) stringByAppendingString:@"M"];
        }
-       return [NSString stringWithFormat:volFormatter,value];
+       return KLineTrimTrailingZeros([NSString stringWithFormat:volFormatter,value]);
     
 }
 

@@ -133,6 +133,15 @@ public abstract class KLineEntity implements ICandle, IMACD, IKDJ, IRSI, IVolume
         return MA10Volume;
     }
 
+    /** 占位 K 线：JS padSparsePeriodBars 补的上市前空位，默认 false，占位由 setPad 置真 */
+    private boolean isPad = false;
+    public boolean isPad() {
+        return isPad;
+    }
+    public void setPad(boolean isPad) {
+        this.isPad = isPad;
+    }
+
     private float maOne = Float.MIN_VALUE;
 
     private float maTwo = Float.MIN_VALUE;

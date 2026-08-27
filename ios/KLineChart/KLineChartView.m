@@ -22,10 +22,13 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
 @property(nonatomic,strong) KLineInfoView *infoView;
 
 @property(nonatomic,strong) UIPanGestureRecognizer *panGesture;
+@property(nonatomic,strong) UITapGestureRecognizer *tapGesture;
 @property(nonatomic,strong) UILongPressGestureRecognizer *longPressGesture;
 @property(nonatomic,strong) UIPinchGestureRecognizer *pinchGesture;
 @property(nonatomic,assign) BOOL panGestureAxisLocked;
 @property(nonatomic,assign) BOOL panGestureIsHorizontal;
+/** 是否由点击触发选中（对齐 Android isTapShow） */
+@property(nonatomic,assign) BOOL isTapShow;
 
 @property(nonatomic,assign) CGFloat maxScroll;
 @property(nonatomic,assign) CGFloat minScroll;
@@ -64,6 +67,15 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
 
 - (void)setDatas:(NSArray<KLineModel *> *)datas {
     _datas = datas;
+    if (datas.count == 0) {
+        self.didApplyInitialRightBlank = NO;
+        _scrollX = 0;
+        _lastScrollX = 0;
+        if (_displayLink) {
+            [_displayLink invalidate];
+            _displayLink = nil;
+        }
+    }
     [self initIndicatirs];
     self.painterView.datas = datas;
 }
@@ -77,8 +89,14 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
     _isLongPress = isLongPress;
     self.painterView.isLongPress = isLongPress;
     if(!isLongPress) {
+        self.isTapShow = NO;
         [self.infoView removeFromSuperview];
     }
+}
+
+- (void)clearSelectedState {
+    self.isTapShow = NO;
+    self.isLongPress = NO;
 }
 
 -(void)setScrollX:(CGFloat)scrollX {
@@ -119,6 +137,11 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
 -(void)setLongPressX:(CGFloat)longPressX {
     _longPressX = longPressX;
     self.painterView.longPressX = longPressX;
+}
+
+-(void)setLongPressY:(CGFloat)longPressY {
+    _longPressY = longPressY;
+    self.painterView.longPressY = longPressY;
 }
 
 -(void)setDirection:(KLineDirection)direction {
@@ -241,6 +264,16 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
   self.painterView.mainValueFormatter = mainValueFormatter;
 }
 
+-(void)setSelectedInfoLabels:(NSArray<NSString *> *)selectedInfoLabels {
+  _selectedInfoLabels = [selectedInfoLabels copy];
+  self.painterView.selectedInfoLabels = _selectedInfoLabels;
+}
+
+-(void)setHideMarketInfoBox:(BOOL)hideMarketInfoBox {
+  _hideMarketInfoBox = hideMarketInfoBox;
+  self.painterView.hideMarketInfoBox = hideMarketInfoBox;
+}
+
 - (instancetype)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -255,6 +288,8 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
         _painterView = [[KLinePainterView alloc] initWithFrame:self.bounds datas:_datas scrollX:_scrollX isLine:_isLine scaleX:_scaleX isLongPress:_isLongPress mainState:_mainState secondaryState:_secondaryState];
         _painterView.baseCandleWidth = [self effectiveBaseCandleWidth];
         _painterView.legendMarginLeft = _legendMarginLeft;
+        _painterView.selectedInfoLabels = _selectedInfoLabels;
+        _painterView.hideMarketInfoBox = _hideMarketInfoBox;
         [self addSubview:_painterView];
          __weak typeof(self) weakSelf = self;
         _painterView.showInfoBlock = ^(KLineModel * _Nonnull model, BOOL isLeft) {
@@ -270,9 +305,14 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
         _panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragKlineEvent:)];
         _panGesture.delegate = self;
         _panGesture.cancelsTouchesInView = YES;
+        _tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapKlineEvent:)];
+        _tapGesture.delegate = self;
         _longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressKlineEvent:)];
+        // 缩短长按阈值，滑动时更快进入选中并跟随十字线
+        _longPressGesture.minimumPressDuration = 0.25;
         _pinchGesture = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(secalXEvent:)];
         [_painterView addGestureRecognizer:_panGesture];
+        [_painterView addGestureRecognizer:_tapGesture];
         [_painterView addGestureRecognizer:_longPressGesture];
         [_painterView addGestureRecognizer:_pinchGesture];
     }
@@ -417,6 +457,10 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
             self.panGestureAxisLocked = NO;
             self.panGestureIsHorizontal = NO;
             _isDrag = NO;
+            // 点击选中后开始拖动：取消选中并恢复滚动（对齐 Android isTapShow）
+            if (self.isTapShow && self.isLongPress) {
+                [self clearSelectedState];
+            }
         } break;
         case UIGestureRecognizerStateChanged:
         {
@@ -424,11 +468,31 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
                 return;
             }
             CGPoint point = [gesture locationInView:self.painterView];
+            // 长按选中后横向滑动：移动十字线，不滚动图表
+            if (self.isLongPress && !self.isTapShow) {
+                // 拖入占位/越界区域：清除选中，恢复滚动（对齐 Android 命中占位即清除）
+                if (![self.painterView canSelectAtX:point.x]) {
+                    [self clearSelectedState];
+                    return;
+                }
+                self.longPressX = point.x;
+                self.longPressY = point.y;
+                self.isLongPress = YES; // 触发重绘
+                return;
+            }
             CGFloat dragX = point.x - _dragbeginX;
             self.scrollX = [self clamp:_lastScrollX + dragX min:_minScroll max:_maxScroll];
         } break;
         case UIGestureRecognizerStateEnded:
         {
+            // 十字线拖动结束：不启动惯性滚动，否则图表会在十字线下滑走，
+            // 信息框与十字线指向的 K 线错位（对齐 Android onFling 的 !showSelected 拦截）
+            if (self.isLongPress && !self.isTapShow) {
+                self.panGestureAxisLocked = NO;
+                self.panGestureIsHorizontal = NO;
+                _isDrag = NO;
+                break;
+            }
             if (!self.panGestureIsHorizontal) {
                 self.panGestureAxisLocked = NO;
                 self.panGestureIsHorizontal = NO;
@@ -459,22 +523,61 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
     
 }
 
+-(void)tapKlineEvent:(UITapGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateEnded) {
+        return;
+    }
+    CGPoint point = [gesture locationInView:self.painterView];
+    // 对齐 Android SELECT_BOTH：
+    // - 长按选中后再点：取消选中
+    // - 未选中 / 点击选中：显示并停留
+    if (self.isLongPress && !self.isTapShow) {
+        [self clearSelectedState];
+        return;
+    }
+    // 点在占位/越界区域：不进入选中态（该 K 线画不出来，选中会变成隐形十字线并吞掉图例）
+    if (![self.painterView canSelectAtX:point.x]) {
+        [self clearSelectedState];
+        return;
+    }
+    self.isTapShow = YES;
+    self.longPressX = point.x;
+    self.longPressY = point.y;
+    self.isLongPress = YES;
+}
+
 -(void)longPressKlineEvent:(UILongPressGestureRecognizer *)gesture {
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
         {
             CGPoint point = [gesture locationInView:self.painterView];
+            // 占位/越界区域不可长按选中（对齐 Android onSelectedChange 的占位拦截）
+            if (![self.painterView canSelectAtX:point.x]) {
+                [self clearSelectedState];
+                break;
+            }
+            self.isTapShow = NO;
             self.longPressX = point.x;
+            self.longPressY = point.y;
             self.isLongPress = YES;
         } break;
         case UIGestureRecognizerStateChanged:
         {
             CGPoint point = [gesture locationInView:self.painterView];
+            if (![self.painterView canSelectAtX:point.x]) {
+                [self clearSelectedState];
+                break;
+            }
+            self.isTapShow = NO;
             self.longPressX = point.x;
+            self.longPressY = point.y;
             self.isLongPress = YES;
         } break;
         case UIGestureRecognizerStateEnded:
-            self.isLongPress = NO;
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            // 松手后保持详情与十字线（对齐 Android，不在 ACTION_UP 清除）
+            break;
         default:
             break;
     }
@@ -483,6 +586,9 @@ static const CGFloat kKLinePanVerticalDominanceRatio = 2.0;
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan: {
             _isScale = true;
+            if (self.isLongPress) {
+                [self clearSelectedState];
+            }
             if(_displayLink) {
                 [_displayLink invalidate];
                 _displayLink = nil;

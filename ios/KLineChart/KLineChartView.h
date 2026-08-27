@@ -39,6 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,assign) BOOL isLongPress;
 
 @property(nonatomic,assign) CGFloat longPressX;
+@property(nonatomic,assign) CGFloat longPressY;
 
 @property(nonatomic,assign) MainState mainState;
 
@@ -90,6 +91,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,strong) NSString* mainValueFormatter;
 
 @property(nonatomic,assign) CGFloat legendMarginLeft;
+
+@property(nonatomic, copy) NSArray<NSString *> *selectedInfoLabels;
+
+@property(nonatomic, assign) BOOL hideMarketInfoBox;
+
+/** 清除点击/长按选中态（十字线+信息框）；重置历史数据时调用，避免旧选中带到新数据 */
+- (void)clearSelectedState;
 
 @end
 

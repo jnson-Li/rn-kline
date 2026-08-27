@@ -29,6 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,assign) BOOL isLongPress;
 
 @property(nonatomic,assign) CGFloat longPressX;
+@property(nonatomic,assign) CGFloat longPressY;
 
 @property(nonatomic,assign) MainState mainState;
 
@@ -79,6 +80,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic,strong) NSString* mainValueFormatter;
 
 @property(nonatomic,assign) CGFloat legendMarginLeft;
+
+/** 长按信息框标签，需 8 项：时间/开/高/低/收/涨跌额/涨跌幅/成交量 */
+@property(nonatomic, copy) NSArray<NSString *> *selectedInfoLabels;
+
+/** 是否隐藏长按信息框，默认 NO */
+@property(nonatomic, assign) BOOL hideMarketInfoBox;
+
+/** 该横坐标能否选中：越界或 isPad 占位 K 线不可选中 */
+- (BOOL)canSelectAtX:(CGFloat)selectX;
 
 @property(nonatomic,copy) void(^showInfoBlock)(KLineModel *model, BOOL isLeft);
 

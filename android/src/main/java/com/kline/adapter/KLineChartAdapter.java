@@ -63,6 +63,11 @@ public class KLineChartAdapter<T extends KLineEntity> extends BaseKLineChartAdap
         return dataSource.get(position).getDate();
     }
 
+    public boolean isPad(int position) {
+        if (position < 0 || position >= dataSource.size()) return false;
+        return dataSource.get(position).isPad();
+    }
+
     /**
      * 重置K线数据
      *

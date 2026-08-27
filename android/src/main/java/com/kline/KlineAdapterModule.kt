@@ -22,6 +22,7 @@ class KlineAdapterModule(reactContext: ReactApplicationContext) :
     entity.close = data.getDouble("close").toFloat()
     entity.volume = data.getDouble("vol").toFloat()
     entity.date = data.getDouble("id").toLong()
+    if (data.hasKey("isPad")) entity.isPad = data.getBoolean("isPad")
     return entity
   }
 

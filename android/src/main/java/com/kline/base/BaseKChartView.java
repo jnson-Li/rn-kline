@@ -8,6 +8,7 @@ import android.database.DataSetObserver;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.PaintFlagsDrawFilter;
@@ -268,6 +269,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
      * 十字线Y坐标显示背景画笔
      */
     protected Paint selectedPriceBoxBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    protected Paint selectedPriceBoxFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     /**
      * 十字线Y坐标显示背景画笔
@@ -725,6 +727,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     private ValueAnimator valueAnimator;
 
     private float selectedY = 0;
+    private float selectedX = 0;
     private float dataLength = 0;
 
     public BaseKChartView(Context context) {
@@ -759,6 +762,12 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
         rightPriceBoxPaint.setStyle(Paint.Style.FILL_AND_STROKE);
         priceLineBoxPaint.setStyle(Paint.Style.STROKE);
         selectedXLinePaint.setStyle(Paint.Style.STROKE);
+        float density = getResources().getDisplayMetrics().density;
+        DashPathEffect crosshairDash = new DashPathEffect(new float[]{4 * density, 3 * density}, 0);
+        selectedXLinePaint.setPathEffect(crosshairDash);
+        selectedYLinePaint.setStyle(Paint.Style.STROKE);
+        selectedYLinePaint.setPathEffect(crosshairDash);
+        selectedPriceBoxFramePaint.setStyle(Paint.Style.STROKE);
         xLabelPaint.setTextAlign(Paint.Align.CENTER);
         isResetChange = 0;
     }
@@ -1049,24 +1058,14 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     public void renderSelected(Canvas canvas, float x) {
         float y, textWidth;
         String text;
-        //十字线竖线
-        float halfWidth = selectedWidth / 2 * scaleX;
-        float left = x - halfWidth;
-        float right = x + halfWidth;
+        // 十字线交点始终跟随触点，不再吸附到所选 K 线的中心。
+        x = xToTranslateX(selectedX);
+        float left;
+        float right;
         float bottom = displayHeight + chartPaddingTop;
         Path path = new Path();
-        path.moveTo(left, chartPaddingTop);
-        path.lineTo(right, chartPaddingTop);
-        path.lineTo(right, bottom);
-        path.lineTo(left, bottom);
-        path.close();
-        if (-1 != selectedYColor) {
-            LinearGradient linearGradient = new LinearGradient(x, chartPaddingTop, x, bottom,
-                    new int[]{Color.TRANSPARENT, selectedYColor, selectedYColor, Color.TRANSPARENT},
-                    new float[]{0f, 0.2f, 0.8f, 1f}, Shader.TileMode.CLAMP);
-            selectedYLinePaint.setShader(linearGradient);
-        }
-        canvas.drawPath(path, selectedYLinePaint);
+        selectedYLinePaint.setShader(null);
+        canvas.drawLine(x, chartPaddingTop, x, bottom, selectedYLinePaint);
         //画X值
         String date = formatDateTime(dataAdapter.getDate(getSelectedIndex()));
         textWidth = commonTextPaint.measureText(date);
@@ -1094,7 +1093,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
         //十字线横线
         if (crossTouchModel == Status.TOUCH_FOLLOW_FINGERS) {
             y = selectedY;
-            if (selectedY < mainRect.top + chartPaddingTop) {
+            if (selectedY < mainRect.top) {
                 return;
             } else if (selectedY < mainRect.bottom) {
                 text = mainRenderer.getValueFormatter().format((float) (mainMinValue + (mainMaxValue - mainMinValue) / (mainRect.bottom - chartPaddingTop) * (mainRect.bottom - selectedY)));
@@ -1133,7 +1132,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
         float tempX = textWidth + 2 * selectedPriceBoxHorizontalPadding;
         float boxTop = y - temp;
         float boxBottom = y + temp;
-        if (yLabelModel == Status.LABEL_NONE_GRID || getX(getSelectedIndex() - screenLeftIndex) > renderWidth / 2) {
+        if (yLabelModel == Status.LABEL_NONE_GRID || selectedX > renderWidth / 2) {
             path = new Path();
             path.moveTo(x, y);
             path.lineTo(x + selectedPriceBoxHorizontalPadding + selectedPriceBoxVerticalPadding, boxBottom);
@@ -1142,7 +1141,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
             path.lineTo(x + selectedPriceBoxHorizontalPadding + selectedPriceBoxVerticalPadding, boxTop);
             path.close();
             canvas.drawPath(path, selectedPriceBoxBackgroundPaint);
-            canvas.drawPath(path, selectedXLinePaint);
+            canvas.drawPath(path, selectedPriceBoxFramePaint);
             canvas.drawText(text, x + selectedPriceBoxVerticalPadding + selectedPriceBoxHorizontalPadding, boxTop + selectedPriceBoxVerticalPadding + baseLine, commonTextPaint);
         } else {
             x = -canvasTranslateX;
@@ -1154,7 +1153,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
             path.lineTo(tempX + x, boxTop);
             path.close();
             canvas.drawPath(path, selectedPriceBoxBackgroundPaint);
-            canvas.drawPath(path, selectedXLinePaint);
+            canvas.drawPath(path, selectedPriceBoxFramePaint);
             canvas.drawText(text, x + selectedPriceBoxHorizontalPadding, boxTop + selectedPriceBoxVerticalPadding + baseLine, commonTextPaint);
         }
     }
@@ -1522,11 +1521,25 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
 
     }
 
+    /** 该位置是否为 padSparsePeriodBars 补的占位 K 线（上市前空位，不可选中/不绘制） */
+    public boolean isPadItem(int position) {
+        if (dataAdapter instanceof com.kline.adapter.KLineChartAdapter) {
+            return ((com.kline.adapter.KLineChartAdapter<?>) dataAdapter).isPad(position);
+        }
+        return false;
+    }
+
     @Override
     public void onSelectedChange(MotionEvent e) {
         if (null != points && points.length > 0) {
             int index = calculateSelectedX(e.getX());
+            if (isPadItem(index)) {
+                showSelected = false;
+                invalidate();
+                return;
+            }
             setSelectedIndex(index);
+            selectedX = e.getX();
             selectedY = e.getY();
             int temp = index * indexInterval;
             if (null != selectedChangedListener) {
@@ -1788,6 +1801,20 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
                     break;
             }
         }
+        // 可见区间内没有任何 K 线参与计算（切换周期瞬间数据为空、或可见区间退化成 0 根）时，
+        // 上面这些累加器仍是 Float 极值种子（CALC_*_WITH_SHOW 用 Float.MIN/MAX_VALUE 打底），
+        // 直接拿去算刻度会得到 1e38 级别的 Y 轴数字和 Infinity。这里回落到最新价。
+        if (mainMaxValue < mainMinValue) {
+            float fallback = getLastPrice() > 0 ? getLastPrice() : 1f;
+            mainMaxValue = fallback;
+            mainMinValue = fallback;
+            mainHighMaxValue = fallback;
+            mainLowMinValue = fallback;
+            volMaxValue = 0.01f;
+            volMinValue = 0;
+            indexMaxValue = 1f;
+            mChildMinValue = 0;
+        }
         if (null == maxMinDeal) {
             if (mainMaxValue == mainMinValue) {
                 //当最大值和最小值都相等的时候 分别增大最大值和 减小最小值
@@ -1890,9 +1917,9 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     public int indexOfTranslateX(float translateX) {
         float dataLength = getDataLength();
         if (dataLength < renderWidth) {
-            return (int) ((translateX + canvasTranslateX) / chartItemWidth / scaleX + 0.5);
+            return (int) (translateX / chartItemWidth / scaleX + 0.5);
         } else {
-            return (int) (translateX / chartItemWidth / getScaleX());
+            return (int) (translateX / chartItemWidth / getScaleX() + 0.5);
         }
     }
 
@@ -2030,6 +2057,23 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
      */
     public int getSelectedIndex() {
         return selectedIndex;
+    }
+
+    /** 当前十字线触点在 View 坐标系中的 X，用于交点和详情框左右布局。 */
+    public float getSelectedTouchX() {
+        return selectedX;
+    }
+
+    /** 右侧价格刻度占用的实际宽度，并额外保留一段视觉间距。 */
+    public float getRightAxisReservedWidth() {
+        if (yLabelPaint.getTextAlign() != Paint.Align.RIGHT) {
+            return 0;
+        }
+        String maxText = valueFormatter.format(mainMaxValue, mainMinValue, mainMaxValue);
+        String minText = valueFormatter.format(mainMaxValue, mainMinValue, mainMinValue);
+        float labelWidth = Math.max(yLabelPaint.measureText(maxText), yLabelPaint.measureText(minText));
+        float gap = 12 * getResources().getDisplayMetrics().density;
+        return labelWidth + yLabelMarginBorder + gap;
     }
 
 
@@ -2240,6 +2284,18 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
             //当前没数据默认加载数据
             int tempDataCount = dataAdapter.getCount();
 
+            if (tempDataCount == 0) {
+                BaseKChartView.this.points = points;
+                setItemsCount(0);
+                lastPrice = 0;
+                lastVol = 0;
+                overScroller.forceFinished(true);
+                changeTranslated(getInitialRightBlankTranslate());
+                needRender = true;
+                invalidate();
+                return;
+            }
+
             if (currentCount == 0) { //原没有数据
                 BaseKChartView.this.points = points;
                 setItemsCount(tempDataCount);
@@ -2272,6 +2328,14 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
 
         @Override
         public void onInvalidated() {
+            // 切周期/币对 resetData 时清除选中态：选中态松手后会保留，不清会整份带到新数据上，
+            // 并按同一个 index 指到另一根完全无关的 K 线（还可能越界 -> renderSelected 直接崩）。
+            // 只有 KLineChartAdapter.resetData 会走到这里（notifyDataWillChanged 的唯一调用方），
+            // changeLast/changeItem/addNewData 等实时推送只走 notifyDataSetChanged，
+            // 所以用户长按出来的十字线不会被 WS 行情打断。对齐 iOS：
+            // ios/KlineAdapter.mm resetData 开头的 [selChart clearSelectedState]。
+            clearSelectedState();
+            selectedY = 0;
             overScroller.forceFinished(true);
             needRender = false;
             //设置当前为0防止切换时出现莫名多一根柱子

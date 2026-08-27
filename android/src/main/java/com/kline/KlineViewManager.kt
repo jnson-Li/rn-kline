@@ -21,6 +21,7 @@ import com.kline.adapter.KLineChartAdapter
 import com.kline.callback.SlidListener
 import com.kline.formatter.DateFormatter
 import com.kline.formatter.ValueFormatter
+import com.kline.formatter.VolValueFormatter
 import com.kline.model.KLineEntity
 import com.kline.utils.DpUtil
 import com.kline.view.KChartView
@@ -54,6 +55,7 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
     _container = layout.findViewById(R.id.kLineContainer)
     _container?.visibility = View.VISIBLE;
     _chartView = _container?.findViewById(R.id.kLineChart)
+    _chartView?.setVolFormatter(VolValueFormatter("%.3f"))
     _chartView?.setAdapter(adapter)
     _chartView?.setSlidListener(object : SlidListener {
       override fun onSlidLeft() {
@@ -174,12 +176,7 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
 
   @ReactProp(name = "volFormatter")
   override fun setVolFormatter(view: LinearLayout?, format: String?) {
-    if (format == null) return
-    _chartView?.setVolFormatter(object : ValueFormatter() {
-      override fun format(value: Double): String {
-        return String.format(format, value)
-      }
-    })
+    _chartView?.setVolFormatter(VolValueFormatter(format ?: "%.3f"))
   }
 
   @ReactProp(name = "dateTimeFormatter")
@@ -453,6 +450,11 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
   override fun setBackgroundFillBottomColor(view: LinearLayout?, value: String?) {
     if (value == null) return
     _chartView?.setBackGroundFillBottomColor(value.toColorInt())
+    // renderBackground() 只填到 indexRect.bottom，底部日期栏那条 chartPaddingBottom
+    // 不会被填充，露出的是 layout/kline_chart.xml 里写死的 android:background="#18181A"。
+    // 深色页看不出来，浅色主题下就是白底图表下方一条黑条。这里让 View 背景跟随下发的
+    // 底部填充色，保持整块图表同色。
+    _chartView?.setBackgroundColor(value.toColorInt())
   }
 
   @ReactProp(name = "timeLineColor")

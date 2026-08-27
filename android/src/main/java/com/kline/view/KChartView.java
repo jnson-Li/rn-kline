@@ -52,6 +52,8 @@ import java.util.Set;
 public class KChartView extends BaseKChartView {
 
     private View progressBar;
+    private int macdIncreaseColor = Color.parseColor("#03C087");
+    private int macdDecreaseColor = Color.parseColor("#FF605A");
 
     public KChartView(Context context) {
         this(context, null);
@@ -94,7 +96,7 @@ public class KChartView extends BaseKChartView {
                 setBetterX(array.getBoolean(R.styleable.KChartView_betterXLabel, true));
                 setBetterSelectedX(array.getBoolean(R.styleable.KChartView_betterSelectedXLabel, true));
                 setyLabelMarginBorder(array.getDimension(R.styleable.KChartView_yLabelMarginBorder, 10));
-                setCrossFollowTouch(array.getInt(R.styleable.KChartView_closeFollowTouch, Status.TOUCH_SHOW_CLOSE));
+                setCrossFollowTouch(array.getInt(R.styleable.KChartView_closeFollowTouch, Status.TOUCH_FOLLOW_FINGERS));
                 setLineWidth(array.getDimension(R.styleable.KChartView_lineWidth, DpUtil.Dp2Px(context, 0.8f)));
                 setCommonTextSize(array.getDimension(R.styleable.KChartView_commonTextSize, DpUtil.Dp2Px(context, 10)));
                 setMacdStrokeWidth(array.getDimension(R.styleable.KChartView_macdStrokeWidth, DpUtil.Dp2Px(context, 0.8f)));
@@ -155,7 +157,7 @@ public class KChartView extends BaseKChartView {
                 setSelectedXLabelBorderWidth(array.getDimension(R.styleable.KChartView_selectedXLabelBorderWidth, DpUtil.Dp2Px(context, 0.8f)));
                 setSelectedXLabelBorderColor(array.getColor(R.styleable.KChartView_selectedXLabelBorderColor, Color.WHITE));
                 setSelectedXLabelBackgroundColor(array.getColor(R.styleable.KChartView_selectedXLabelBackgroundColor, Color.parseColor("#CFD3E9")));
-                setSelectedYLineWidth(array.getDimension(R.styleable.KChartView_selectedYLineWidth, 7));
+                setSelectedYLineWidth(array.getDimension(R.styleable.KChartView_selectedYLineWidth, DpUtil.Dp2Px(context, 0.8f)));
                 setSelectedXLineColor(array.getColor(R.styleable.KChartView_selectedXLineColor, Color.parseColor("#CFD3E9")));
                 setSelectedYLineColor(array.getColor(R.styleable.KChartView_selectedYLineColor, Color.parseColor("#1ACFD3E9")));
                 setSelectedYColor(array.getColor(R.styleable.KChartView_selectedYColor, Color.parseColor("#CFD3E9")));
@@ -198,8 +200,9 @@ public class KChartView extends BaseKChartView {
 
 
                 //macd
-                setMacdChartColor(array.getColor(R.styleable.KChartView_macdIncreaseColor, Color.parseColor("#03C087")),
-                        array.getColor(R.styleable.KChartView_macdDecreaseColor, Color.parseColor("#FF605A")));
+                macdIncreaseColor = array.getColor(R.styleable.KChartView_macdIncreaseColor, Color.parseColor("#03C087"));
+                macdDecreaseColor = array.getColor(R.styleable.KChartView_macdDecreaseColor, Color.parseColor("#FF605A"));
+                setMacdChartColor(macdIncreaseColor, macdDecreaseColor);
                 setMACDWidth(array.getDimension(R.styleable.KChartView_macdWidth, 10));
                 setDIFColor(array.getColor(R.styleable.KChartView_difColor, Color.parseColor("#F6DC93")));
                 setDEAColor(array.getColor(R.styleable.KChartView_deaColor, Color.parseColor("#61D1C0")));
@@ -880,6 +883,8 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setMainValueFormatter(IValueFormatter valueFormatter) {
         mainRenderer.setValueFormatter(valueFormatter);
+        // iOS 端 MACD 等指标图例也复用 mainValueFormatter，Android 需同步以保两端精度一致
+        setIndexValueFormatter(valueFormatter);
         return this;
     }
 
@@ -1134,6 +1139,8 @@ public class KChartView extends BaseKChartView {
     public KChartView setIncreaseColor(int color) {
         mainRenderer.setIncreaseColor(color);
         volumeRenderer.setIncreaseColor(color);
+        macdIncreaseColor = color;
+        setMacdChartColor(macdIncreaseColor, macdDecreaseColor);
         return this;
     }
 
@@ -1146,6 +1153,8 @@ public class KChartView extends BaseKChartView {
     public KChartView setDecreaseColor(int color) {
         mainRenderer.setDecreaseColor(color);
         volumeRenderer.setDecreaseColor(color);
+        macdDecreaseColor = color;
+        setMacdChartColor(macdIncreaseColor, macdDecreaseColor);
         return this;
     }
 
@@ -1494,6 +1503,7 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setSelectedXLineWidth(float width) {
         selectedXLinePaint.setStrokeWidth(width);
+        selectedPriceBoxFramePaint.setStrokeWidth(width);
         return this;
     }
 
@@ -1505,6 +1515,7 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setSelectedXLineColor(int color) {
         selectedXLinePaint.setColor(color);
+        selectedPriceBoxFramePaint.setColor(color);
         return this;
     }
 
@@ -1516,6 +1527,7 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setSelectedYLineWidth(float width) {
         selectedWidth = width;
+        selectedYLinePaint.setStrokeWidth(width);
         return this;
     }
 

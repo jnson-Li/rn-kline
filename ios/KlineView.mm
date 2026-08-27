@@ -127,7 +127,10 @@ using namespace facebook::react;
     }
   }
   // 设置交易量绘制 BarChart/LineChart ⚠️暂时忽略 volChartStatues
-  // 是否隐藏信息框 默认false ⚠️暂时忽略 hideMarketInfoBox
+  // 是否隐藏信息框 默认false
+  if (oldViewProps.hideMarketInfoBox != newViewProps.hideMarketInfoBox) {
+    _klineCharView.hideMarketInfoBox = newViewProps.hideMarketInfoBox;
+  }
   // 网格列
   if (oldViewProps.gridColumns != newViewProps.gridColumns) {
     _klineCharView.gridColumns = newViewProps.gridColumns;
@@ -210,7 +213,14 @@ using namespace facebook::react;
   // 设置选择器弹出框 ⚠️暂时忽略 selectedInfoBox
   // 选中时X坐标边框线宽 ⚠️暂时忽略 selectedLabelBorderWidth
   // 选中时X坐标边框线颜色 ⚠️暂时忽略 selectedLabelBorderColor
-  // 设置选中框的文本 ⚠️暂时忽略 selectedInfoLabels
+  // 设置选中框的文本
+  if (oldViewProps.selectedInfoLabels != newViewProps.selectedInfoLabels) {
+    NSMutableArray<NSString *> *labels = [NSMutableArray arrayWithCapacity:newViewProps.selectedInfoLabels.size()];
+    for (const auto &label : newViewProps.selectedInfoLabels) {
+      [labels addObject:[[NSString alloc] initWithUTF8String:label.c_str()]];
+    }
+    _klineCharView.selectedInfoLabels = labels;
+  }
   // 设置十字线跟随手势移动/显示收盘价 ⚠️暂时忽略 crossFollowTouch
   // 设置y轴上Label与视图右边距 ⚠️暂时忽略 yLabelMarginBorder
   // 设置背景色顶部颜色
