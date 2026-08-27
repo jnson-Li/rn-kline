@@ -61,6 +61,12 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
         return;
     }
     CGFloat top = [self getY:curPoint.vol];
+    CGFloat bottom = CGRectGetMaxY(self.chartRect);
+    // 对齐 Android VolumeRenderer：非零成交量至少绘制 2pt，避免最新一根成交量较小时
+    // 柱高落入亚像素范围，在 iOS 上看起来时有时无。
+    if (top > bottom - 2.0) {
+        top = bottom - 2.0;
+    }
     CGContextSetLineWidth(context, self.candleWidth);
     // 对齐安卓 VolumeRenderer：close >= open 记涨色（平盘/十字星 close==open 也算涨，用涨色）。
     // iOS 原用 close > open（严格），导致 close==open 的平盘量柱落到跌色（红），与安卓相反——
@@ -70,7 +76,7 @@ timeLineEndRadius:(CGFloat) timeLineEndRadius
     } else {
         CGContextSetStrokeColorWithColor(context, decreaseColor.CGColor);
     }
-    CGContextMoveToPoint(context, curX, CGRectGetMaxY(self.chartRect));
+    CGContextMoveToPoint(context, curX, bottom);
     CGContextAddLineToPoint(context, curX, top);
     CGContextDrawPath(context, kCGPathStroke);
 }

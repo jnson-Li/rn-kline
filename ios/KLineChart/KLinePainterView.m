@@ -25,6 +25,24 @@ static BOOL KLineColorIsLight(UIColor *color) {
     return (0.299 * r + 0.587 * g + 0.114 * b) > 0.5;
 }
 
+// 详情框要求精确颜色；不能复用 UIColor+RGB 的旧 Color() 宏（该 helper 历史上按 225
+// 而不是 255 归一化，会使 RGB 和 70% alpha 都产生偏差）。
+static UIColor *KLineInfoBoxBackgroundColor(void) {
+    return gKLineChartLightTheme
+        ? [UIColor colorWithRed:245.0 / 255.0 green:245.0 / 255.0 blue:245.0 / 255.0 alpha:1.0]
+        : [UIColor colorWithRed:20.0 / 255.0 green:20.0 / 255.0 blue:21.0 / 255.0 alpha:1.0];
+}
+
+static UIColor *KLineInfoBoxKeyColor(void) {
+    return gKLineChartLightTheme
+        ? [UIColor colorWithRed:98.0 / 255.0 green:98.0 / 255.0 blue:98.0 / 255.0 alpha:1.0]
+        : [UIColor colorWithWhite:1.0 alpha:0.70];
+}
+
+static UIColor *KLineInfoBoxValueColor(void) {
+    return gKLineChartLightTheme ? [UIColor blackColor] : [UIColor whiteColor];
+}
+
 @interface KLinePainterView()
 @property(nonatomic,assign) CGFloat displayHeight;
 @property(nonatomic,strong) MainChartRenderer *mainRenderer;
@@ -675,8 +693,9 @@ static BOOL KLineColorIsLight(UIColor *color) {
     NSString *volFormat = self.volFormatter.length > 0 ? self.volFormatter : @"%.3f";
     CGFloat diff = curPoint.close - curPoint.open;
     NSString *sign = diff >= 0 ? @"+" : @"-";
-    UIColor *changeColor = diff >= 0 ? (self.increaseColor ?: ChartColors_upColor) : (self.decreaseColor ?: ChartColors_dnColor);
-
+    UIColor *changeColor = diff >= 0
+        ? (self.increaseColor ?: ChartColors_upColor)
+        : (self.decreaseColor ?: ChartColors_dnColor);
     NSString *timeStr = [self calculateDateText:curPoint.id];
     NSString *openStr = [NSString stringWithFormat:priceFormat, curPoint.open];
     NSString *highStr = [NSString stringWithFormat:priceFormat, curPoint.high];
@@ -690,20 +709,22 @@ static BOOL KLineColorIsLight(UIColor *color) {
     NSArray<NSString *> *values = @[timeStr, openStr, highStr, lowStr, closeStr, changeStr, changeRateStr, volStr];
 
     CGFloat fontSize = ChartStyle_defaultTextSize;
-    CGFloat padding = 4;
+    CGFloat padding = 8;
+    CGFloat gap = 2;
+    CGFloat cornerRadius = 8;
     CGFloat margin = 5;
     CGFloat top = ChartStyle_topPadding;
-    CGFloat lineHeight = fontSize + 4;
+    CGFloat lineHeight = [@"Ag" getRectWithFontSize:fontSize].size.height;
     CGFloat maxWidth = 0;
 
     for (NSInteger i = 0; i < 8; i++) {
-        NSString *line = [NSString stringWithFormat:@"%@%@", self.selectedInfoLabels[i], values[i]];
-        CGRect rect = [line getRectWithFontSize:fontSize];
-        maxWidth = MAX(maxWidth, rect.size.width);
+        CGFloat lineWidth = [self.selectedInfoLabels[i] getRectWithFontSize:fontSize].size.width
+            + [values[i] getRectWithFontSize:fontSize].size.width;
+        maxWidth = MAX(maxWidth, lineWidth);
     }
 
     maxWidth += padding * 2;
-    CGFloat height = padding * 2 + lineHeight * 8;
+    CGFloat height = padding * 2 + lineHeight * 8 + gap * 7;
     NSString *maxAxisText = [NSString stringWithFormat:self.valueFormatter, self.mainRenderer.maxValue];
     NSString *minAxisText = [NSString stringWithFormat:self.valueFormatter, self.mainRenderer.minValue];
     CGFloat axisTextWidth = MAX([maxAxisText getRectWithFontSize:ChartStyle_reightTextSize].size.width,
@@ -714,42 +735,26 @@ static BOOL KLineColorIsLight(UIColor *color) {
     CGFloat left = isLeft ? margin : MAX(margin, rightSideLeft);
     CGRect boxRect = CGRectMake(left, top, maxWidth, height);
 
-    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:boxRect cornerRadius:padding / 2.0];
+    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:boxRect cornerRadius:cornerRadius];
     CGContextAddPath(context, path.CGPath);
-    CGContextSetFillColorWithColor(context, ChartColors_markerBgColor.CGColor);
+    CGContextSetFillColorWithColor(context, KLineInfoBoxBackgroundColor().CGColor);
     CGContextFillPath(context);
-    CGContextAddPath(context, path.CGPath);
-    CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
-    // 0.8 而不是 0.5，对齐 Android：selectorBorderPaint 的线宽来自 setLineWidth，
-    // 默认 0.8dp（KChartView.java 的 lineWidth attr），模拟器上实测是 2px 的 #DDDDDD。
-    // iOS 原来的 0.5pt 在 @3x 上只有 1.5px，抗锯齿摊成两行半透明像素后几乎看不见，
-    // 浅色主题下白框白底等于没有边框 —— QA 反馈的就是这个。
-    CGContextSetLineWidth(context, 0.8);
-    CGContextStrokePath(context);
 
-    // 标签左对齐、数值右对齐，与 Android MainRenderer.drawSelector 保持一致。
-    // 之前把「标签+数值」拼成一整行左对齐，而标签宽度不一（开/高/低/收 是 1 个字，
-    // 涨跌额/涨跌幅/成交量 是 3 个字），数值列因此参差不齐。
-    // 盒宽仍然按拼接后的整行取 max，所以右对齐的数值不可能压到标签上。
     CGFloat right = left + maxWidth;
     CGFloat y = top + padding;
     for (NSInteger i = 0; i < 8; i++) {
-        // 标签恒用常规文字色，只有涨跌额/涨跌幅这两行的「数值」才染涨跌色 ——
-        // 与 Android MainRenderer.drawSelector 一致（它的 label 一律走 selectorTextPaint，
-        // 只有 strings[5]/[6] 走 upPaint/downPaint）。之前 iOS 把 label 也一起染了，
-        // 两端并排对比时 iOS 的「涨跌额」三个字是绿的、Android 是黑的。
-        UIColor *valueColor = (i == 5 || i == 6) ? changeColor : ChartColors_markerTextColor;
         NSString *value = values[i];
+        UIColor *valueColor = (i == 5 || i == 6) ? changeColor : KLineInfoBoxValueColor();
         CGFloat valueWidth = [value getRectWithFontSize:fontSize].size.width;
         [self.mainRenderer drawText:self.selectedInfoLabels[i]
                             atPoint:CGPointMake(left + padding, y)
                            fontSize:fontSize
-                          textColor:ChartColors_markerTextColor];
+                          textColor:KLineInfoBoxKeyColor()];
         [self.mainRenderer drawText:value
                             atPoint:CGPointMake(right - padding - valueWidth, y)
                            fontSize:fontSize
                           textColor:valueColor];
-        y += lineHeight;
+        y += lineHeight + gap;
     }
 }
 

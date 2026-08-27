@@ -396,6 +396,7 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
 
   @ReactProp(name = "selectedInfoBoxPadding")
   override fun setSelectedInfoBoxPadding(view: LinearLayout?, value: Float) {
+    if (value <= 0) return
     _chartView?.setSelectInfoBoxPadding(value)
   }
 
@@ -757,9 +758,23 @@ class KlineViewManager : ViewGroupManager<LinearLayout>(),
   override fun setSelectedInfoBox(view: LinearLayout?, value: ReadableMap?) {
     if (value == null) return
     val textColor = value.getString("textColor")
-    val borderColor = value.getString("borderColor")
     val backgroundColor = value.getString("backgroundColor")
-    if (textColor == null || borderColor == null || backgroundColor == null) return
-    _chartView?.setSelectInfoBoxColors(textColor.toColorInt(), borderColor.toColorInt(), backgroundColor.toColorInt())
+    if (textColor == null || backgroundColor == null) return
+    val keyColor = if (value.hasKey("keyColor") && !value.isNull("keyColor")) {
+      value.getString("keyColor")
+    } else {
+      textColor
+    }
+    val valueColor = if (value.hasKey("valueColor") && !value.isNull("valueColor")) {
+      value.getString("valueColor")
+    } else {
+      textColor
+    }
+    if (keyColor == null || valueColor == null) return
+    _chartView?.setSelectInfoBoxColors(
+      keyColor.toColorInt(),
+      valueColor.toColorInt(),
+      backgroundColor.toColorInt()
+    )
   }
 }

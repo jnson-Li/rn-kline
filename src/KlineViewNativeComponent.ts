@@ -243,7 +243,9 @@ export interface NativeProps extends ViewProps {
    */
   selectedInfoBox?: {
     textColor: string;
-    borderColor: string;
+    keyColor?: string;
+    valueColor?: string;
+    borderColor?: string;
     backgroundColor: string;
   };
   /**

@@ -55,28 +55,14 @@ extern BOOL gKLineChartLightTheme;
 //选中后显示值边框颜色
 #define ChartColors_markerBorderColor   ThemeColor(0xffFFFFFF, 0xffDDDDDD)
 
-// 长按信息框底色（现在只有 drawMarketInfoBox 在用，Y 轴价格气泡已拆到
-// ChartColors_selectedPriceBoxBgColor）。深色的 0x444444 是对齐 Android：
-// detailTheme.js 的 selectedInfoBox.backgroundColor 深色分支就是 #444444
-// （= Android 原生默认 DKGRAY），iOS 原生默认是 0x0D1722，两端并排看不一样。
-// 浅色两端本来就都是 #FFFFFF（模拟器取色实测 (255,255,255)）。
-#define ChartColors_markerBgColor   ThemeColor(0xff444444, 0xffFFFFFF)
-
 /**
- * 长按（十字线 + 三个气泡 + 信息框）整套配色。
+ * 长按十字线与坐标气泡配色。
  *
  * 原来这一整条链路的文字/线条全是写死的 [UIColor whiteColor]，深色底下没问题，
  * 浅色主题下就是白线白字画在白底上 —— QA 看到的现象是「长按只剩一条灰竖带，
  * 时间/开/高/低/收/成交量 全都没有」，其实是画了但看不见。
- *
- * 浅色取值刻意对齐 JS 侧 src/theme/detailTheme.js 的 getKlineChartColors()
- * （crossXLine / crossY / selectedLabelBackground / selectedPriceBoxBackground /
- * selectedInfoBox.textColor），这样 iOS 和 Android 长按出来是同一套颜色。
- * 深色取值与改动前逐字相同，深色模式视觉零改动。
+ * 详情框使用 KLinePainterView 内的精确 UIColor 配色，不走此处旧 Color() helper。
  */
-//长按信息框文字（时间/开/高/低/收/成交量；涨跌额、涨跌幅另取涨跌色）
-#define ChartColors_markerTextColor   ThemeColor(0xffFFFFFF, 0xff000000)
-
 //长按十字线横线与交点圆
 #define ChartColors_crossLineColor   ThemeColor(0xffFFFFFF, 0xff333333)
 

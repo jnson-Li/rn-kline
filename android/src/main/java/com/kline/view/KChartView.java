@@ -168,12 +168,12 @@ public class KChartView extends BaseKChartView {
                 setSelectedDateBoxVerticalPadding(array.getDimension(R.styleable.KChartView_selectedDateBoxVerticalPadding, DpUtil.Dp2Px(context, 0.8f)));
                 setSelectInfoBoxMargin(array.getDimension(R.styleable.KChartView_selectedInfoBoxMargin, DpUtil.Dp2Px(context, 5)));
                 setSelectInfoBoxColors(
-                        array.getColor(R.styleable.KChartView_selectedInfoBoxTextColor, Color.WHITE),
-                        array.getColor(R.styleable.KChartView_selectedInfoBoxBorderColor, Color.WHITE),
-                        array.getColor(R.styleable.KChartView_selectedInfoBoxBackgroundColor, Color.DKGRAY)
+                        Color.parseColor("#B3FFFFFF"),
+                        Color.WHITE,
+                        Color.parseColor("#141415")
                 );
                 setSelectedInfoTextSize(array.getDimension(R.styleable.KChartView_selectedInfoTextSize, DpUtil.Dp2Px(context, 10)));
-                setSelectInfoBoxPadding(array.getDimension(R.styleable.KChartView_selectedInfoBoxPadding, 4));
+                setSelectInfoBoxPadding(array.getDimension(R.styleable.KChartView_selectedInfoBoxPadding, DpUtil.Dp2Px(context, 8)));
                 setSelectedInfoLabels((String[]) array.getTextArray(R.styleable.KChartView_selectedInfoLabels));
                 setSelectedXLabelTextColor(array.getColor(R.styleable.KChartView_selectedXLabelTextColor, Color.parseColor("#6D87A8")));
                 setSelectedXLabelTextSize(array.getDimension(R.styleable.KChartView_selectedXLabelTextSize, DpUtil.Dp2Px(context, 10)));
@@ -1606,13 +1606,13 @@ public class KChartView extends BaseKChartView {
     /**
      * 设置选择器弹出框相关颜色 selected popupwindow text color
      *
-     * @param textColor       文字
-     * @param borderColor     边框
+     * @param keyColor        文案键
+     * @param valueColor      数值
      * @param backgroundColor 背景
      * @return {@link KChartView}
      */
-    public KChartView setSelectInfoBoxColors(int textColor, int borderColor, int backgroundColor) {
-        mainRenderer.setSelectorColors(textColor, borderColor, backgroundColor);
+    public KChartView setSelectInfoBoxColors(int keyColor, int valueColor, int backgroundColor) {
+        mainRenderer.setSelectorColors(keyColor, valueColor, backgroundColor);
         return this;
     }
 

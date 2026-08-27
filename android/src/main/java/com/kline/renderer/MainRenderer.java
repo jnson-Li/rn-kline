@@ -31,7 +31,7 @@ public class MainRenderer extends BaseRenderer {
     private int itemCount;
     private String[] strings = new String[8];
     private IValueFormatter valueFormatter = new ValueFormatter();
-    private float candleWidth, margin, padding, mainLegendMarginTop,
+    private float candleWidth, margin, padding, selectorGap, selectorCornerRadius, mainLegendMarginTop,
             maOne, maTwo, maThree, bollUp, bollMb, bollDn;
     private final int indexInterval;
     private String indexMa1, indexMa2, indexMa3, indexBoll, indexUb, indexLb;
@@ -52,8 +52,8 @@ public class MainRenderer extends BaseRenderer {
     private Paint indexPaintTwo = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint indexPaintThree = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private Paint selectorTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint selectorBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Paint selectorKeyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Paint selectorValuePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint selectorBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private String[] marketInfoText = new String[8];
@@ -61,7 +61,10 @@ public class MainRenderer extends BaseRenderer {
 
     public MainRenderer(Context context) {
         indexInterval = Constants.getCount();
-        selectorBorderPaint.setStyle(Paint.Style.STROKE);
+        float density = context.getResources().getDisplayMetrics().density;
+        padding = 8 * density;
+        selectorGap = 2 * density;
+        selectorCornerRadius = 8 * density;
         upLinePaint.setStyle(Paint.Style.STROKE);
         upLinePaint.setAntiAlias(true);
         downLinePaint.setStyle(Paint.Style.STROKE);
@@ -275,12 +278,12 @@ public class MainRenderer extends BaseRenderer {
         strings[7] = view.getVolumeRenderer().getValueFormatter().format(values[Constants.INDEX_VOL]);
 
         float width = 0, left, top = margin + view.getChartPaddingTop();
-        //上下多加两个padding值的间隙
         int length = strings.length;
-        float height = padding * ((length - 1) + 4) + selectedTextHeight * length;
+        float height = padding * 2 + selectedTextHeight * length + selectorGap * (length - 1);
         for (int i = 0; i < length; i++) {
-            String tempString = marketInfoText[i] + strings[i];
-            width = Math.max(width, selectorTextPaint.measureText(tempString));
+            float lineWidth = selectorKeyPaint.measureText(marketInfoText[i])
+                    + selectorValuePaint.measureText(strings[i]);
+            width = Math.max(width, lineWidth);
         }
         width += padding * 2;
 
@@ -294,23 +297,20 @@ public class MainRenderer extends BaseRenderer {
 
         float right = left + width;
         RectF r = new RectF(left, top, right, top + height);
-        canvas.drawRoundRect(r, padding / 2, padding / 2, selectorBackgroundPaint);
-        canvas.drawRoundRect(r, padding / 2, padding / 2, selectorBorderPaint);
-        float y = top + padding * 2 + selectedTextBaseLine;
+        canvas.drawRoundRect(r, selectorCornerRadius, selectorCornerRadius, selectorBackgroundPaint);
+        float y = top + padding + selectedTextBaseLine;
         float tempX = right - padding;
         for (int i = 0; i < length; i++) {
             String s = strings[i];
-            canvas.drawText(marketInfoText[i], left + padding, y, selectorTextPaint);
+            canvas.drawText(marketInfoText[i], left + padding, y, selectorKeyPaint);
+            Paint valuePaint;
             if (i == 5 || i == 6) {
-                if (tempDiffPrice >= 0) {
-                    canvas.drawText(s, tempX - selectorTextPaint.measureText(s), y, upPaint);
-                } else {
-                    canvas.drawText(s, tempX - selectorTextPaint.measureText(s), y, downPaint);
-                }
+                valuePaint = tempDiffPrice >= 0 ? upPaint : downPaint;
             } else {
-                canvas.drawText(s, tempX - selectorTextPaint.measureText(s), y, selectorTextPaint);
+                valuePaint = selectorValuePaint;
             }
-            y += selectedTextHeight + padding;
+            canvas.drawText(s, tempX - valuePaint.measureText(s), y, valuePaint);
+            y += selectedTextHeight + selectorGap;
         }
 
     }
@@ -366,13 +366,13 @@ public class MainRenderer extends BaseRenderer {
     /**
      * 设置选择器弹出框相关颜色 selected popupwindow text color
      *
-     * @param textColor       文字
-     * @param borderColor     边框
+     * @param keyColor        文案键
+     * @param valueColor      数值
      * @param backgroundColor 背景
      */
-    public void setSelectorColors(int textColor, int borderColor, int backgroundColor) {
-        selectorTextPaint.setColor(textColor);
-        selectorBorderPaint.setColor(borderColor);
+    public void setSelectorColors(int keyColor, int valueColor, int backgroundColor) {
+        selectorKeyPaint.setColor(keyColor);
+        selectorValuePaint.setColor(valueColor);
         selectorBackgroundPaint.setColor(backgroundColor);
     }
 
@@ -385,10 +385,11 @@ public class MainRenderer extends BaseRenderer {
      * @param textSize textsize
      */
     public void setSelectorTextSize(float textSize) {
-        selectorTextPaint.setTextSize(textSize);
-        downPaint.setTextSize(textSize);
+        selectorKeyPaint.setTextSize(textSize);
+        selectorValuePaint.setTextSize(textSize);
         upPaint.setTextSize(textSize);
-        Paint.FontMetrics metrics = selectorTextPaint.getFontMetrics();
+        downPaint.setTextSize(textSize);
+        Paint.FontMetrics metrics = selectorKeyPaint.getFontMetrics();
         selectedTextHeight = metrics.descent - metrics.ascent;
         selectedTextBaseLine = (selectedTextHeight - metrics.bottom - metrics.top) / 2;
 
@@ -402,8 +403,6 @@ public class MainRenderer extends BaseRenderer {
         indexPaintTwo.setStrokeWidth(width);
         indexPaintOne.setStrokeWidth(width);
         linePaint.setStrokeWidth(width);
-        selectorBorderPaint.setStrokeWidth(width);
-
     }
 
     private float maTextHeight;
