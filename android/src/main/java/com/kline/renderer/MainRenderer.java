@@ -291,8 +291,10 @@ public class MainRenderer extends BaseRenderer {
         if (x > view.getChartWidth() / 2) {
             left = margin;
         } else {
-            float rightAxisReserve = view.getRightAxisReservedWidth();
-            left = Math.max(margin, view.getChartWidth() - width - margin - rightAxisReserve);
+            // 右侧使用固定预留宽度，避免横线价格位数变化时详情框左右抖动。
+            float density = view.getResources().getDisplayMetrics().density;
+            float rightReserve = Math.max(view.getRightAxisReservedWidth(), 60 * density);
+            left = Math.max(margin, view.getChartWidth() - width - margin - rightReserve);
         }
 
         float right = left + width;

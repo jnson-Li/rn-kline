@@ -42,6 +42,7 @@ import com.kline.utils.Status;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /*************************************************************************
@@ -269,8 +270,6 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
      * 十字线Y坐标显示背景画笔
      */
     protected Paint selectedPriceBoxBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    protected Paint selectedPriceBoxFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
     /**
      * 十字线Y坐标显示背景画笔
      */
@@ -767,7 +766,6 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
         selectedXLinePaint.setPathEffect(crosshairDash);
         selectedYLinePaint.setStyle(Paint.Style.STROKE);
         selectedYLinePaint.setPathEffect(crosshairDash);
-        selectedPriceBoxFramePaint.setStyle(Paint.Style.STROKE);
         xLabelPaint.setTextAlign(Paint.Align.CENTER);
         isResetChange = 0;
     }
@@ -1058,6 +1056,7 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
     public void renderSelected(Canvas canvas, float x) {
         float y, textWidth;
         String text;
+        float crossValue;
         // 十字线交点始终跟随触点，不再吸附到所选 K 线的中心。
         x = xToTranslateX(selectedX);
         float left;
@@ -1096,21 +1095,18 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
             if (selectedY < mainRect.top) {
                 return;
             } else if (selectedY < mainRect.bottom) {
-                text = mainRenderer.getValueFormatter().format((float) (mainMinValue + (mainMaxValue - mainMinValue) / (mainRect.bottom - chartPaddingTop) * (mainRect.bottom - selectedY)));
-            } else if (null != volRect && selectedY < volRect.top) {
-                return;
-            } else if (null != volRect && selectedY < volRect.bottom) {
-                text = volumeRenderer.getValueFormatter().format((volMaxValue / volRect.height() * (volRect.bottom - selectedY)));
-            } else if (null != indexRenderer && selectedY < indexRect.bottom) {
-                text = mainRenderer.getValueFormatter().format((indexMaxValue / indexRect.height() * (indexRect.bottom - selectedY)));
-            } else if (null != indexRenderer && selectedY < indexRect.top) {
-                return;
+                crossValue = (float) (mainMinValue
+                        + (mainMaxValue - mainMinValue)
+                        / (mainRect.bottom - chartPaddingTop)
+                        * (mainRect.bottom - selectedY));
+                text = mainRenderer.getValueFormatter().format(crossValue);
             } else {
                 return;
             }
         } else {
-            text = mainRenderer.getValueFormatter().format(points[getSelectedIndex() * indexInterval + Constants.INDEX_CLOSE]);
-            y = getMainY(points[getSelectedIndex() * indexInterval + Constants.INDEX_CLOSE]);
+            crossValue = points[getSelectedIndex() * indexInterval + Constants.INDEX_CLOSE];
+            text = mainRenderer.getValueFormatter().format(crossValue);
+            y = getMainY(crossValue);
         }
         canvas.drawLine(-canvasTranslateX, y, -canvasTranslateX + renderWidth, y, selectedXLinePaint);
         //十字线交点
@@ -1118,44 +1114,55 @@ public abstract class BaseKChartView extends ScrollAndScaleView {
             canvas.drawCircle(x, y, chartItemWidth, selectedBigCrossPaint);
             canvas.drawCircle(x, y, selectedPointRadius, selectedCrossPaint);
         }
-        switch (yLabelModel) {
-            case Status.LABEL_NONE_GRID:
-                textWidth = labelSpace;
-                x = -canvasTranslateX + viewWidth - textWidth;
-                break;
-            case Status.LABEL_WITH_GRID:
-                textWidth = commonTextPaint.measureText(text);
-                x = -canvasTranslateX + viewWidth - textWidth - 1 - 2 * selectedPriceBoxHorizontalPadding - selectedPriceBoxVerticalPadding;
-                break;
+        renderSelectedPriceBox(canvas, y, text, crossValue);
+    }
+
+    /** 在十字横线右侧固定绘制价格和相对最新价的涨跌幅。 */
+    private void renderSelectedPriceBox(Canvas canvas, float y, String priceText, float crossValue) {
+        float density = getResources().getDisplayMetrics().density;
+        float horizontalPadding = 5 * density;
+        float verticalPadding = 2 * density;
+        float gap = 2 * density;
+        float cornerRadius = 4 * density;
+        float rightInset = 4 * density;
+
+        float latestClose = lastPrice;
+        int latestCloseIndex = (itemsCount - 1) * indexInterval + Constants.INDEX_CLOSE;
+        if (points != null && latestCloseIndex >= 0 && latestCloseIndex < points.length) {
+            latestClose = points[latestCloseIndex];
         }
-        temp = textHeight / 2 + selectedPriceBoxVerticalPadding;
-        float tempX = textWidth + 2 * selectedPriceBoxHorizontalPadding;
-        float boxTop = y - temp;
-        float boxBottom = y + temp;
-        if (yLabelModel == Status.LABEL_NONE_GRID || selectedX > renderWidth / 2) {
-            path = new Path();
-            path.moveTo(x, y);
-            path.lineTo(x + selectedPriceBoxHorizontalPadding + selectedPriceBoxVerticalPadding, boxBottom);
-            path.lineTo(-canvasTranslateX + viewWidth - 2, boxBottom);
-            path.lineTo(-canvasTranslateX + viewWidth - 2, boxTop);
-            path.lineTo(x + selectedPriceBoxHorizontalPadding + selectedPriceBoxVerticalPadding, boxTop);
-            path.close();
-            canvas.drawPath(path, selectedPriceBoxBackgroundPaint);
-            canvas.drawPath(path, selectedPriceBoxFramePaint);
-            canvas.drawText(text, x + selectedPriceBoxVerticalPadding + selectedPriceBoxHorizontalPadding, boxTop + selectedPriceBoxVerticalPadding + baseLine, commonTextPaint);
-        } else {
-            x = -canvasTranslateX;
-            path = new Path();
-            path.moveTo(x, boxTop);
-            path.lineTo(x, boxBottom);
-            path.lineTo(tempX + x, boxBottom);
-            path.lineTo(tempX + x + selectedPriceBoxHorizontalPadding + selectedPriceBoxVerticalPadding, y);
-            path.lineTo(tempX + x, boxTop);
-            path.close();
-            canvas.drawPath(path, selectedPriceBoxBackgroundPaint);
-            canvas.drawPath(path, selectedPriceBoxFramePaint);
-            canvas.drawText(text, x + selectedPriceBoxHorizontalPadding, boxTop + selectedPriceBoxVerticalPadding + baseLine, commonTextPaint);
+
+        String percentText = "--";
+        if (latestClose > 0 && Float.isFinite(latestClose) && Float.isFinite(crossValue)) {
+            float percent = (crossValue - latestClose) / latestClose * 100f;
+            if (Math.abs(percent) < 0.005f) {
+                percent = 0;
+            }
+            percentText = String.format(Locale.US, "%+.2f%%", percent);
         }
+
+        Paint textPaint = new Paint(commonTextPaint);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics metrics = textPaint.getFontMetrics();
+        float lineHeight = metrics.descent - metrics.ascent;
+        float boxWidth = Math.max(textPaint.measureText(priceText), textPaint.measureText(percentText))
+                + horizontalPadding * 2;
+        float boxHeight = verticalPadding * 2 + lineHeight * 2 + gap;
+        float right = -canvasTranslateX + viewWidth - rightInset;
+        float maxBoxTop = Math.max(mainRect.top, mainRect.bottom - boxHeight);
+        float boxTop = Math.max(mainRect.top, Math.min(y - boxHeight / 2, maxBoxTop));
+        RectF box = new RectF(right - boxWidth, boxTop, right, boxTop + boxHeight);
+
+        selectedPriceBoxBackgroundPaint.setColor(Color.parseColor("#383838"));
+        canvas.drawRoundRect(box, cornerRadius, cornerRadius, selectedPriceBoxBackgroundPaint);
+
+        float centerX = box.centerX();
+        float baselineOffset = -(metrics.ascent + metrics.descent) / 2;
+        float firstCenterY = boxTop + verticalPadding + lineHeight / 2;
+        float secondCenterY = firstCenterY + lineHeight + gap;
+        canvas.drawText(priceText, centerX, firstCenterY + baselineOffset, textPaint);
+        canvas.drawText(percentText, centerX, secondCenterY + baselineOffset, textPaint);
     }
 
     /**

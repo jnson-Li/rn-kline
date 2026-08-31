@@ -29,8 +29,8 @@ static BOOL KLineColorIsLight(UIColor *color) {
 // 而不是 255 归一化，会使 RGB 和 70% alpha 都产生偏差）。
 static UIColor *KLineInfoBoxBackgroundColor(void) {
     return gKLineChartLightTheme
-        ? [UIColor colorWithRed:245.0 / 255.0 green:245.0 / 255.0 blue:245.0 / 255.0 alpha:1.0]
-        : [UIColor colorWithRed:20.0 / 255.0 green:20.0 / 255.0 blue:21.0 / 255.0 alpha:1.0];
+        ? [UIColor colorWithRed:245.0 / 255.0 green:245.0 / 255.0 blue:245.0 / 255.0 alpha:0.90]
+        : [UIColor colorWithRed:20.0 / 255.0 green:20.0 / 255.0 blue:21.0 / 255.0 alpha:0.90];
 }
 
 static UIColor *KLineInfoBoxKeyColor(void) {
@@ -317,12 +317,14 @@ static UIColor *KLineInfoBoxValueColor(void) {
         [self drawRightText:context];
         [self drawDate:context];
         [self drawMaxAndMin:context];
+        // 实时价先画，十字线和右侧两行价格框最后覆盖，避免两个右侧标签相交时
+        // 实时价把十字价格框盖住。
+        [self drawRealTimePrice:context];
         if(_isLongPress) {
             [self drawLongPressCrossLine:context];
         } else {
             [self drawTopText:context curPoint:self.datas.firstObject];
         }
-        [self drawRealTimePrice:context];
     }
 }
 
@@ -633,41 +635,55 @@ static UIColor *KLineInfoBoxValueColor(void) {
                              curX:(CGFloat)curX
                                 y:(CGFloat)y
                        crossPrice:(CGFloat)crossPrice {
-    NSString *text = [NSString stringWithFormat:_mainValueFormatter,crossPrice];
-    CGRect rect = [text getRectWithFontSize:ChartStyle_defaultTextSize];
-    CGFloat padding = 3;
-    CGFloat textHeight = rect.size.height + padding * 2;
-    CGFloat textWdith = rect.size.width;
-    BOOL isLeft = false;
-    if(curX > self.frame.size.width / 2) {
-        isLeft = true;
-        CGContextMoveToPoint(context, self.frame.size.width, y - textHeight / 2);
-        CGContextAddLineToPoint(context, self.frame.size.width, y + textHeight / 2);
-        
-        CGContextAddLineToPoint(context, self.frame.size.width - textWdith, y + textHeight / 2);
-        CGContextAddLineToPoint(context, self.frame.size.width - textWdith - 10, y);
-        CGContextAddLineToPoint(context, self.frame.size.width - textWdith, y - textHeight / 2);
-        CGContextAddLineToPoint(context, self.frame.size.width, y - textHeight / 2);
-        CGContextSetLineWidth(context, 1);
-        CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
-        CGContextSetFillColorWithColor(context, ChartColors_selectedPriceBoxBgColor.CGColor);
-        CGContextDrawPath(context, kCGPathFillStroke);
-        [self.mainRenderer drawText:text atPoint:CGPointMake(self.frame.size.width - textWdith - 2, y - rect.size.height / 2) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
-    } else {
-        isLeft = false;
-        CGContextMoveToPoint(context, 0, y - textHeight / 2);
-        CGContextAddLineToPoint(context, 0, y + textHeight / 2);
-        
-        CGContextAddLineToPoint(context, textWdith, y + textHeight / 2);
-        CGContextAddLineToPoint(context,textWdith + 10, y);
-        CGContextAddLineToPoint(context,textWdith, y - textHeight / 2);
-        CGContextAddLineToPoint(context, 0, y - textHeight / 2);
-        CGContextSetLineWidth(context, 1);
-        CGContextSetStrokeColorWithColor(context, ChartColors_markerBorderColor.CGColor);
-        CGContextSetFillColorWithColor(context, ChartColors_selectedPriceBoxBgColor.CGColor);
-        CGContextDrawPath(context, kCGPathFillStroke);
-        [self.mainRenderer drawText:text atPoint:CGPointMake(2, y - rect.size.height / 2) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
+    BOOL isLeft = curX > self.frame.size.width / 2;
+    NSString *priceText = [NSString stringWithFormat:_mainValueFormatter,crossPrice];
+    NSString *percentText = @"--";
+    CGFloat latestPrice = self.datas.firstObject.close;
+    if (latestPrice > 0 && isfinite(latestPrice) && isfinite(crossPrice)) {
+        CGFloat percent = (crossPrice - latestPrice) / latestPrice * 100.0;
+        if (fabs(percent) < 0.005) {
+            percent = 0;
+        }
+        percentText = [NSString stringWithFormat:@"%+.2f%%", percent];
     }
+
+    CGFloat fontSize = ChartStyle_defaultTextSize;
+    CGFloat horizontalPadding = 5;
+    CGFloat verticalPadding = 2;
+    CGFloat gap = 2;
+    CGFloat cornerRadius = 4;
+    CGFloat rightInset = 4;
+    CGRect priceRect = [priceText getRectWithFontSize:fontSize];
+    CGRect percentRect = [percentText getRectWithFontSize:fontSize];
+    CGFloat lineHeight = MAX(priceRect.size.height, percentRect.size.height);
+    CGFloat boxWidth = MAX(priceRect.size.width, percentRect.size.width) + horizontalPadding * 2;
+    CGFloat boxHeight = verticalPadding * 2 + lineHeight * 2 + gap;
+    CGFloat maxBoxTop = MAX(CGRectGetMinY(self.mainRect), CGRectGetMaxY(self.mainRect) - boxHeight);
+    CGFloat boxTop = MAX(CGRectGetMinY(self.mainRect), MIN(y - boxHeight / 2, maxBoxTop));
+    CGRect priceBoxRect = CGRectMake(self.frame.size.width - rightInset - boxWidth,
+                                     boxTop,
+                                     boxWidth,
+                                     boxHeight);
+    UIBezierPath *priceBoxPath = [UIBezierPath bezierPathWithRoundedRect:priceBoxRect
+                                                            cornerRadius:cornerRadius];
+    CGContextAddPath(context, priceBoxPath.CGPath);
+    CGContextSetFillColorWithColor(context,
+        [UIColor colorWithRed:56.0 / 255.0
+                       green:56.0 / 255.0
+                        blue:56.0 / 255.0
+                       alpha:1.0].CGColor);
+    CGContextFillPath(context);
+
+    CGFloat firstY = boxTop + verticalPadding;
+    CGFloat secondY = firstY + lineHeight + gap;
+    [self.mainRenderer drawText:priceText
+                        atPoint:CGPointMake(CGRectGetMidX(priceBoxRect) - priceRect.size.width / 2, firstY)
+                       fontSize:fontSize
+                      textColor:[UIColor whiteColor]];
+    [self.mainRenderer drawText:percentText
+                        atPoint:CGPointMake(CGRectGetMidX(priceBoxRect) - percentRect.size.width / 2, secondY)
+                       fontSize:fontSize
+                      textColor:[UIColor whiteColor]];
     
     NSString *dateText = [self calculateDateText:curPoint.id];
     CGRect dateRect = [dateText getRectWithFontSize:ChartStyle_defaultTextSize];
@@ -677,11 +693,15 @@ static UIColor *KLineInfoBoxValueColor(void) {
     CGContextAddRect(context, CGRectMake(curX - dateRect.size.width / 2 - datepadding, CGRectGetMinY(self.dateRect), dateRect.size.width + datepadding * 2, dateRect.size.height + datepadding * 2));
     CGContextDrawPath(context, kCGPathFillStroke);
     [self.mainRenderer drawText:dateText atPoint:CGPointMake(curX - dateRect.size.width  / 2, CGRectGetMinY(self.dateRect) + datepadding) fontSize:ChartStyle_defaultTextSize textColor: [UIColor whiteColor]];
-    [self drawMarketInfoBox:context curPoint:curPoint isLeft:isLeft];
+    [self drawMarketInfoBox:context
+                   curPoint:curPoint
+                     isLeft:isLeft];
     [self drawTopText:context curPoint:curPoint];
 }
 
--(void)drawMarketInfoBox:(CGContextRef)context curPoint:(KLineModel *)curPoint isLeft:(BOOL)isLeft {
+-(void)drawMarketInfoBox:(CGContextRef)context
+                curPoint:(KLineModel *)curPoint
+                  isLeft:(BOOL)isLeft {
     if (self.hideMarketInfoBox) {
         return;
     }
@@ -731,7 +751,9 @@ static UIColor *KLineInfoBoxValueColor(void) {
                                 [minAxisText getRectWithFontSize:ChartStyle_reightTextSize].size.width);
     // 6pt 是价格刻度自身右边距，另留 12pt 视觉间隔，避免右上详情框盖住价格。
     CGFloat rightAxisReserve = axisTextWidth + 18.0;
-    CGFloat rightSideLeft = self.frame.size.width - rightAxisReserve - maxWidth - margin;
+    // 右侧使用固定预留宽度，避免横线价格位数变化时详情框左右抖动。
+    CGFloat rightReserve = MAX(rightAxisReserve, 60.0);
+    CGFloat rightSideLeft = self.frame.size.width - rightReserve - maxWidth - margin;
     CGFloat left = isLeft ? margin : MAX(margin, rightSideLeft);
     CGRect boxRect = CGRectMake(left, top, maxWidth, height);
 

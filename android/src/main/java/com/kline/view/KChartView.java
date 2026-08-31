@@ -162,7 +162,7 @@ public class KChartView extends BaseKChartView {
                 // 竖线现在是 0.8dp 虚线，不再是旧版宽渐变色带；10% alpha 会几乎不可见。
                 setSelectedYLineColor(array.getColor(R.styleable.KChartView_selectedYLineColor, Color.parseColor("#CFD3E9")));
                 setSelectedYColor(array.getColor(R.styleable.KChartView_selectedYColor, Color.parseColor("#CFD3E9")));
-                setSelectedPriceBoxBackgroundColor(array.getColor(R.styleable.KChartView_selectedPriceBoxBackgroundColor, Color.parseColor("#081724")));
+                setSelectedPriceBoxBackgroundColor(array.getColor(R.styleable.KChartView_selectedPriceBoxBackgroundColor, Color.parseColor("#383838")));
                 setSelectedPriceBoxHorizentalPadding(array.getDimension(R.styleable.KChartView_selectedPriceBoxHorizontalPadding, DpUtil.Dp2Px(context, 5)));
                 setSelectedPriceboxVerticalPadding(array.getDimension(R.styleable.KChartView_selectedPriceBoxVerticalPadding, DpUtil.Dp2Px(context, 0.8f)));
                 setSelectedDateBoxHorizontalPadding(array.getDimension(R.styleable.KChartView_selectedDateBoxHorizontalPadding, DpUtil.Dp2Px(context, 5)));
@@ -1504,7 +1504,6 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setSelectedXLineWidth(float width) {
         selectedXLinePaint.setStrokeWidth(width);
-        selectedPriceBoxFramePaint.setStrokeWidth(width);
         return this;
     }
 
@@ -1516,7 +1515,6 @@ public class KChartView extends BaseKChartView {
      */
     public KChartView setSelectedXLineColor(int color) {
         selectedXLinePaint.setColor(color);
-        selectedPriceBoxFramePaint.setColor(color);
         return this;
     }
 
